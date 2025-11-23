@@ -1,0 +1,69 @@
+{
+  "name": "cloudflare-sentinel",
+  "version": "1.0.0",
+  "description": "Attack detection and rate limiting middleware for Cloudflare Workers - Pluggable detector system with layered rate limiting",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./middleware": {
+      "types": "./dist/middleware/index.d.ts",
+      "default": "./dist/middleware/index.js"
+    },
+    "./detector": {
+      "types": "./dist/detector/index.d.ts",
+      "default": "./dist/detector/index.js"
+    },
+    "./logger": {
+      "types": "./dist/logger/index.d.ts",
+      "default": "./dist/logger/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/types/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "rate-limit",
+    "security",
+    "ddos",
+    "attack-detection",
+    "middleware"
+  ],
+  "author": "lploc94",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lploc94/cloudflare-sentinel.git"
+  },
+  "homepage": "https://github.com/lploc94/cloudflare-sentinel#readme",
+  "bugs": {
+    "url": "https://github.com/lploc94/cloudflare-sentinel/issues"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250106.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "typescript": "^5.5.2",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  }
+}

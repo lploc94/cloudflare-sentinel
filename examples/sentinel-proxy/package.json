@@ -1,0 +1,19 @@
+{
+  "name": "sentinel-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run",
+    "type-check": "tsc --noEmit",
+    "deploy": "npm run type-check && wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "cloudflare-sentinel": "file:../.."
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250106.0",
+    "wrangler": "^3.0.0"
+  }
+}

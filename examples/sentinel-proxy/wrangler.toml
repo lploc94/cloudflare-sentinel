@@ -1,0 +1,53 @@
+name = "sentinel-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Routes - configure your domain
+# routes = [
+#   { pattern = "example.com/*", zone_name = "example.com" }
+# ]
+
+# Cron trigger cho cleanup tự động (weekly on Sunday 3 AM UTC)
+[triggers]
+crons = ["0 3 * * 0"]
+
+# Rate Limiter binding
+[limits]
+cpu_ms = 50000
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "sentinel"
+database_id = "your-d1-database-id"  # wrangler d1 create sentinel
+
+# KV Namespace for behavior tracking (REQUIRED for behavior tracking)
+[[kv_namespaces]]
+binding = "BEHAVIOR_KV"
+id = "your-kv-namespace-id"  # wrangler kv:namespace create BEHAVIOR_KV
+
+# Analytics Engine
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+
+# Rate Limiter
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+
+# R2 Bucket (optional - for archiving before cleanup)
+[[r2_buckets]]
+binding = "ARCHIVE_BUCKET"
+bucket_name = "sentinel-archives"
+
+# Environment variables
+[vars]
+ORIGIN_URL = "https://your-origin-website.com"  # Website that need to protect
+DEBUG = "false"
+CLEANUP_MODE = "BALANCED"  # MINIMAL, BALANCED, or CONSERVATIVE
+ENABLE_ARCHIVE = "true"    # Backup to R2 before cleanup
+
+# Performance & Reliability
+ORIGIN_TIMEOUT = "30"      # Origin fetch timeout in seconds
+MAX_REQUEST_SIZE = "10485760"  # Max request size in bytes (10MB)
+ENABLE_STATIC_CACHE = "true"   # Cache static assets (images, CSS, JS)
