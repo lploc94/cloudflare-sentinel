@@ -295,6 +295,26 @@ export interface SentinelConfig {
   
   /** Detectors (NEW - pluggable detector system) */
   detectors?: any[];  // IDetector[] - any to avoid circular dependency
+  
+  /**
+   * Endpoint-specific detectors
+   * 
+   * Apply additional detectors only to specific endpoints.
+   * Global detectors (above) run first, then endpoint-specific detectors.
+   * 
+   * Example:
+   * ```typescript
+   * endpointDetectors: {
+   *   '/api/search/*': [new EntropyDetector({ entropyThreshold: 5.0 })],
+   *   '/api/admin/*': [new EntropyDetector({ entropyThreshold: 4.5 })],
+   * }
+   * ```
+   * 
+   * Supports glob patterns: *, **, ?
+   * Default: {} (no endpoint-specific detectors)
+   */
+  endpointDetectors?: Record<string, any[]>;  // Record<string, IDetector[]>
+  
   /** Enable early block check (skip detection if already blocked) */
   enableEarlyBlockCheck?: boolean;
   

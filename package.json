@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-sentinel",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Attack detection and rate limiting middleware for Cloudflare Workers - Pluggable detector system with layered rate limiting",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -352,3 +352,132 @@ Entropy detector is **complementary** to pattern-based detectors:
 - **Memory**: Minimal (no state)
 - **Recommended**: Enable on endpoints receiving user input
 
+---
+
+## Endpoint-Specific Detectors
+
+Apply detectors **only to specific endpoints** instead of globally.
+
+### Why Use Endpoint-Specific Detectors?
+
+1. **Performance** - Don't run expensive detectors on all endpoints
+2. **Reduce false positives** - Only check entropy on endpoints that shouldn't receive encoded data
+3. **Fine-grained control** - Different detection rules for different parts of your app
+
+### Configuration
+
+```typescript
+import { 
+  Sentinel, 
+  SQLInjectionRequestDetector,
+  XSSRequestDetector,
+  EntropyDetector,
+  RateLimitPeriod,
+} from 'cloudflare-sentinel';
+
+const sentinel = new Sentinel({
+  // Global detectors - run on ALL endpoints
+  detectors: [
+    new SQLInjectionRequestDetector(),
+    new XSSRequestDetector(),
+  ],
+  
+  // Endpoint-specific detectors - run ONLY on matching endpoints
+  endpointDetectors: {
+    // Search endpoints - check for encoded payloads
+    '/api/search/*': [
+      new EntropyDetector({ entropyThreshold: 5.0 }),
+    ],
+    
+    // Admin endpoints - stricter entropy check
+    '/api/admin/*': [
+      new EntropyDetector({ 
+        entropyThreshold: 4.5,  // More sensitive
+        excludeFields: [],       // Check all fields
+      }),
+    ],
+    
+    // Public API - very strict
+    '/api/public/**': [
+      new EntropyDetector({ entropyThreshold: 4.0 }),
+    ],
+  },
+  
+  attackLimits: {
+    sql_injection: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
+    xss: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
+    obfuscated_payload: { limit: 3, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
+  },
+});
+```
+
+### Execution Order
+
+1. **Global detectors** run first (in priority order)
+2. **Endpoint-specific detectors** run after (if endpoint matches)
+3. First detection wins - stops on first attack found
+
+### Pattern Matching
+
+| Pattern | Matches | Doesn't Match |
+|---------|---------|---------------|
+| `/api/*` | `/api/users`, `/api/posts` | `/api/v1/users` |
+| `/api/**` | `/api/users`, `/api/v1/users`, `/api/a/b/c` | `/other` |
+| `/api/v?/users` | `/api/v1/users`, `/api/v2/users` | `/api/v10/users` |
+
+### Examples
+
+#### Only check entropy on form endpoints
+
+```typescript
+endpointDetectors: {
+  '/api/*/submit': [
+    new EntropyDetector({ entropyThreshold: 5.0 }),
+  ],
+  '/api/contact': [
+    new EntropyDetector({ entropyThreshold: 5.0 }),
+  ],
+}
+```
+
+#### Different thresholds for different security levels
+
+```typescript
+endpointDetectors: {
+  // Public endpoints - standard check
+  '/public/*': [
+    new EntropyDetector({ entropyThreshold: 5.5 }),
+  ],
+  
+  // Internal API - stricter
+  '/internal/*': [
+    new EntropyDetector({ entropyThreshold: 4.5 }),
+  ],
+  
+  // Admin - most strict
+  '/admin/**': [
+    new EntropyDetector({ 
+      entropyThreshold: 4.0,
+      requireAdditionalSignals: false,
+    }),
+  ],
+}
+```
+
+#### Skip entropy check on certain endpoints
+
+Don't add endpoint to `endpointDetectors` - only global detectors will run:
+
+```typescript
+// EntropyDetector NOT in global detectors
+detectors: [
+  new SQLInjectionRequestDetector(),
+  new XSSRequestDetector(),
+],
+
+// EntropyDetector ONLY on these endpoints
+endpointDetectors: {
+  '/api/search/*': [new EntropyDetector()],
+  '/api/form/*': [new EntropyDetector()],
+}
+// Other endpoints won't run EntropyDetector

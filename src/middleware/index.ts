@@ -255,14 +255,22 @@ export class Sentinel {
   };
 
   /**
-   * Run all request detectors
+   * Run all request detectors (global + endpoint-specific)
    */
   private async runRequestDetectors(
     request: Request,
     context: any
   ): Promise<DetectorResult | null> {
+    const url = new URL(request.url);
+    const endpoint = url.pathname;
     
-    for (const detector of this.detectors) {
+    // Get endpoint-specific detectors
+    const endpointDetectors = this.getEndpointDetectors(endpoint);
+    
+    // Combine global + endpoint-specific detectors
+    const allDetectors = [...this.detectors, ...endpointDetectors];
+    
+    for (const detector of allDetectors) {
       if (!detector.detectRequest) continue;
       
       try {
@@ -276,6 +284,7 @@ export class Sentinel {
             detector: detector.name,
             attackType: result.attackType,
             confidence: result.confidence,
+            endpoint,
           });
           return result;  // Stop on first detection
         }
@@ -291,15 +300,23 @@ export class Sentinel {
   }
 
   /**
-   * Run all response detectors
+   * Run all response detectors (global + endpoint-specific)
    */
   private async runResponseDetectors(
     request: Request,
     response: Response,
     context: any
   ): Promise<DetectorResult | null> {
+    const url = new URL(request.url);
+    const endpoint = url.pathname;
     
-    for (const detector of this.detectors) {
+    // Get endpoint-specific detectors
+    const endpointDetectors = this.getEndpointDetectors(endpoint);
+    
+    // Combine global + endpoint-specific detectors
+    const allDetectors = [...this.detectors, ...endpointDetectors];
+    
+    for (const detector of allDetectors) {
       if (!detector.detectResponse) continue;
       
       try {
@@ -313,6 +330,7 @@ export class Sentinel {
             detector: detector.name,
             attackType: result.attackType,
             confidence: result.confidence,
+            endpoint,
           });
           return result;
         }
@@ -325,6 +343,41 @@ export class Sentinel {
     }
     
     return null;
+  }
+
+  /**
+   * Get endpoint-specific detectors that match the given endpoint
+   */
+  private getEndpointDetectors(endpoint: string): IDetector[] {
+    if (!this.config.endpointDetectors) return [];
+    
+    const matchedDetectors: IDetector[] = [];
+    
+    for (const [pattern, detectors] of Object.entries(this.config.endpointDetectors)) {
+      if (this.matchEndpoint(endpoint, pattern)) {
+        // Filter enabled detectors and add to list
+        const enabledDetectors = (detectors as IDetector[])
+          .filter(d => d.enabled !== false);
+        matchedDetectors.push(...enabledDetectors);
+      }
+    }
+    
+    // Sort by priority (higher first)
+    return matchedDetectors.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  }
+
+  /**
+   * Check if endpoint matches glob pattern
+   */
+  private matchEndpoint(endpoint: string, pattern: string): boolean {
+    // Convert glob pattern to regex
+    const regexPattern = pattern
+      .replace(/\*\*/g, '{{DOUBLESTAR}}')
+      .replace(/\*/g, '[^/]*')
+      .replace(/\?/g, '.')
+      .replace(/{{DOUBLESTAR}}/g, '.*');
+    const regex = new RegExp(`^${regexPattern}$`);
+    return regex.test(endpoint);
   }
 
   /**
