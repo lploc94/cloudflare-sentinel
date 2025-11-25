@@ -187,18 +187,27 @@ export default {
         },
       } : undefined,
       
-      // Built-in detectors (separated by request/response)
-      detectors: [
-        // Request detectors
-        new SQLInjectionRequestDetector(),
-        new XSSRequestDetector(),
-        new PathTraversalRequestDetector(),
-        new BruteForceDetector(),
-        // Response detectors
-        new SQLInjectionResponseDetector(),
-        new XSSResponseDetector(),
-        new PathTraversalResponseDetector(),
-      ],
+      // Unified detectors configuration (global + endpoint-specific)
+      detectors: {
+        // Global detectors - run on ALL endpoints
+        '*': [
+          // Request detectors
+          new SQLInjectionRequestDetector(),
+          new XSSRequestDetector(),
+          new PathTraversalRequestDetector(),
+          new BruteForceDetector(),
+          // Response detectors
+          new SQLInjectionResponseDetector(),
+          new XSSResponseDetector(),
+          new PathTraversalResponseDetector(),
+        ],
+        
+        // Example: Add entropy detector only to search endpoints
+        // Uncomment to enable:
+        // '/api/search/*': [
+        //   new EntropyDetector({ entropyThreshold: 5.0 }),
+        // ],
+      },
       
       // Attack limits (Cloudflare Rate Limiting API only supports 10s or 60s)
       attackLimits: {

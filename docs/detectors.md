@@ -376,15 +376,15 @@ import {
 } from 'cloudflare-sentinel';
 
 const sentinel = new Sentinel({
-  // Global detectors - run on ALL endpoints
-  detectors: [
-    new SQLInjectionRequestDetector(),
-    new XSSRequestDetector(),
-  ],
-  
-  // Endpoint-specific detectors - run ONLY on matching endpoints
-  endpointDetectors: {
-    // Search endpoints - check for encoded payloads
+  // Unified detectors configuration (supports both formats)
+  detectors: {
+    // Global detectors - run on ALL endpoints (use '*' key)
+    '*': [
+      new SQLInjectionRequestDetector(),
+      new XSSRequestDetector(),
+    ],
+    
+    // Endpoint-specific detectors - run ONLY on matching endpoints
     '/api/search/*': [
       new EntropyDetector({ entropyThreshold: 5.0 }),
     ],
@@ -408,6 +408,18 @@ const sentinel = new Sentinel({
     xss: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
     obfuscated_payload: { limit: 3, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
   },
+});
+```
+
+#### Backward Compatibility (Array Format)
+
+```typescript
+// Still supported - all detectors are global
+const sentinel = new Sentinel({
+  detectors: [
+    new SQLInjectionRequestDetector(),
+    new XSSRequestDetector(),
+  ],
 });
 ```
 

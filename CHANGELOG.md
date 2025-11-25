@@ -5,6 +5,16 @@ All notable changes to Cloudflare Sentinel will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2025-11-25
+
+### Added
+- **Unified detectors configuration** - Merge global and endpoint-specific detectors into single field
+  - Array format: `detectors: [new SQLInjectionRequestDetector()]` (backward compatible)
+  - Object format: `detectors: { '*': [global], '/api/*': [endpoint-specific] }`
+  - Mirrors `attackLimits` configuration pattern for consistency
+  - Warning when endpoint patterns exist but no global detectors configured
+  - See [Detector Guide](docs/detectors.md#endpoint-specific-detectors) for examples
+
 ## [1.0.3] - 2025-11-25
 
 ### Added

@@ -22,6 +22,7 @@ export class Sentinel {
   private logger: SecurityLogger;
   private appLogger: SentinelLogger;
   private detectors: IDetector[];
+  private endpointDetectors: Record<string, IDetector[]>;
   private behaviorTracker?: BehaviorTracker;
   private whitelist?: Whitelist;
 
@@ -53,10 +54,42 @@ export class Sentinel {
     this.attackLimiter = new AttackLimiter(this.config);
     this.logger = new SecurityLogger(this.config);
     
-    // Initialize detectors
-    this.detectors = (this.config.detectors || [])
-      .filter(d => d.enabled !== false)
-      .sort((a, b) => (b.priority || 0) - (a.priority || 0));  // Higher priority first
+    // Initialize detectors (handle both array and object formats)
+    this.detectors = [];
+    this.endpointDetectors = {};
+    
+    if (this.config.detectors) {
+      if (Array.isArray(this.config.detectors)) {
+        // Array format - all global detectors
+        this.detectors = this.config.detectors
+          .filter(d => d.enabled !== false)
+          .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+      } else {
+        // Object format - global + endpoint-specific
+        for (const [pattern, detectors] of Object.entries(this.config.detectors)) {
+          const enabledDetectors = (detectors as IDetector[])
+            .filter(d => d.enabled !== false)
+            .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+          
+          if (pattern === '*') {
+            // Global detectors
+            this.detectors = enabledDetectors;
+          } else {
+            // Endpoint-specific detectors
+            this.endpointDetectors[pattern] = enabledDetectors;
+          }
+        }
+        
+        // Warning if object format has endpoint patterns but no global detectors
+        if (this.detectors.length === 0 && Object.keys(this.endpointDetectors).length > 0) {
+          this.appLogger.warn('No global detectors configured - only endpoint-specific detectors will run', {
+            component: 'Sentinel',
+            endpointPatterns: Object.keys(this.endpointDetectors),
+            recommendation: 'Add global detectors with "*" key for comprehensive protection',
+          });
+        }
+      }
+    }
     
     // Initialize behavior tracker if enabled
     if (this.config.enableBehaviorTracking && this.config.kv) {
@@ -77,9 +110,14 @@ export class Sentinel {
       });
     }
 
-    this.appLogger.info(`Initialized with ${this.detectors.length} detectors`, {
+    const endpointDetectorCount = Object.values(this.endpointDetectors)
+      .reduce((sum, detectors) => sum + detectors.length, 0);
+    
+    this.appLogger.info(`Initialized with ${this.detectors.length} global and ${endpointDetectorCount} endpoint-specific detectors`, {
       component: 'Sentinel',
-      detectorsCount: this.detectors.length,
+      globalDetectors: this.detectors.length,
+      endpointDetectors: endpointDetectorCount,
+      endpointPatterns: Object.keys(this.endpointDetectors),
     });
   }
 
@@ -349,16 +387,13 @@ export class Sentinel {
    * Get endpoint-specific detectors that match the given endpoint
    */
   private getEndpointDetectors(endpoint: string): IDetector[] {
-    if (!this.config.endpointDetectors) return [];
+    if (!this.endpointDetectors) return [];
     
     const matchedDetectors: IDetector[] = [];
     
-    for (const [pattern, detectors] of Object.entries(this.config.endpointDetectors)) {
+    for (const [pattern, detectors] of Object.entries(this.endpointDetectors)) {
       if (this.matchEndpoint(endpoint, pattern)) {
-        // Filter enabled detectors and add to list
-        const enabledDetectors = (detectors as IDetector[])
-          .filter(d => d.enabled !== false);
-        matchedDetectors.push(...enabledDetectors);
+        matchedDetectors.push(...detectors);
       }
     }
     

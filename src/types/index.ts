@@ -293,27 +293,29 @@ export interface SentinelConfig {
   /** Identifier extractor (default: IP) */
   identifierExtractor?: (request: Request, context?: any) => Identifier | Promise<Identifier>;
   
-  /** Detectors (NEW - pluggable detector system) */
-  detectors?: any[];  // IDetector[] - any to avoid circular dependency
-  
   /**
-   * Endpoint-specific detectors
+   * Detectors configuration (NEW - pluggable detector system)
    * 
-   * Apply additional detectors only to specific endpoints.
-   * Global detectors (above) run first, then endpoint-specific detectors.
+   * Supports both global and endpoint-specific detectors in unified format.
    * 
-   * Example:
+   * Examples:
    * ```typescript
-   * endpointDetectors: {
-   *   '/api/search/*': [new EntropyDetector({ entropyThreshold: 5.0 })],
-   *   '/api/admin/*': [new EntropyDetector({ entropyThreshold: 4.5 })],
+   * // Array format - global detectors only (backward compatible)
+   * detectors: [new SQLInjectionRequestDetector()]
+   * 
+   * // Object format - global + endpoint-specific
+   * detectors: {
+   *   '*': [new SQLInjectionRequestDetector(), new XSSRequestDetector()],  // Global
+   *   '/api/search/*': [new EntropyDetector({ entropyThreshold: 5.0 })],     // Endpoint-specific
+   *   '/api/admin/**': [new EntropyDetector({ entropyThreshold: 4.5 })],     // Endpoint-specific
    * }
    * ```
    * 
+   * Execution order: Global detectors first, then endpoint-specific.
    * Supports glob patterns: *, **, ?
-   * Default: {} (no endpoint-specific detectors)
+   * Default: [] (no detectors)
    */
-  endpointDetectors?: Record<string, any[]>;  // Record<string, IDetector[]>
+  detectors?: any[] | Record<string, any[]>;  // IDetector[] or Record<string, IDetector[]>
   
   /** Enable early block check (skip detection if already blocked) */
   enableEarlyBlockCheck?: boolean;
