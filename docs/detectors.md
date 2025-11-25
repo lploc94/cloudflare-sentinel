@@ -14,6 +14,7 @@ Scan incoming requests **before** reaching origin:
 - `XSSRequestDetector` - XSS payloads in input
 - `PathTraversalRequestDetector` - Path traversal in paths/params
 - `BruteForceDetector` - Login patterns (request + response)
+- `EntropyDetector` - Obfuscated/encoded payloads using Shannon entropy
 
 ### Response Detectors
 Scan outgoing responses **after** from origin:
@@ -223,4 +224,131 @@ const sentinel = new Sentinel({
   },
 });
 ```
+
+---
+
+## Shannon Entropy Detector
+
+Detects **obfuscated/encoded payloads** by analyzing the randomness (entropy) of input data.
+
+### What is Shannon Entropy?
+
+Shannon entropy measures the randomness of data (0-8 bits):
+
+| Entropy | Type | Examples |
+|---------|------|----------|
+| 0-3 | Normal text | `hello world`, `john doe` |
+| 3-5 | URL/JSON data | `id=123&name=john`, `{"user":"test"}` |
+| **5-8** | **Encoded/Obfuscated** | Base64, hex, encrypted data |
+
+### Use Cases
+
+**✅ WHEN TO USE:**
+- API endpoints that should NOT receive encoded data
+- Login forms (detect encoded injection payloads)
+- Query parameters that expect simple values
+- Detect data exfiltration (encoded sensitive data being sent out)
+
+**❌ WHEN NOT TO USE (or add to excludePaths):**
+- JWT/OAuth token endpoints
+- File upload endpoints (base64 images)
+- Encryption/crypto endpoints
+- Webhook endpoints receiving encoded payloads
+
+### Configuration
+
+```typescript
+import { EntropyDetector, RateLimitPeriod } from 'cloudflare-sentinel';
+
+const sentinel = new Sentinel({
+  detectors: [
+    // Pattern-based detectors first
+    new SQLInjectionRequestDetector(),
+    new XSSRequestDetector(),
+    
+    // Entropy detector catches obfuscated attacks
+    new EntropyDetector({
+      // Minimum entropy to trigger (0-8, default: 5.0)
+      entropyThreshold: 5.0,
+      
+      // Minimum string length to analyze (default: 16)
+      minLength: 16,
+      
+      // Paths to exclude (glob patterns)
+      excludePaths: [
+        '/api/auth/token',
+        '/api/auth/refresh',
+        '/oauth/*',
+        '/api/upload/*',
+        '/webhook/*',
+      ],
+      
+      // Fields to exclude
+      excludeFields: [
+        'token', 'jwt', 'access_token', 'refresh_token',
+        'image', 'file', 'data', 'password',
+      ],
+      
+      // What to check
+      checkQuery: true,
+      checkBody: true,
+      checkHeaders: ['x-api-key', 'x-auth-token'],
+      
+      // Reduce false positives: require encoding patterns
+      requireAdditionalSignals: false,
+    }),
+  ],
+  
+  attackLimits: {
+    obfuscated_payload: {
+      limit: 5,
+      period: RateLimitPeriod.ONE_MINUTE,
+      action: 'block',
+    },
+  },
+});
+```
+
+### Threshold Guidelines
+
+| Threshold | Sensitivity | False Positives | Use Case |
+|-----------|-------------|-----------------|----------|
+| **4.5** | High | More FPs | Security audit, paranoid mode |
+| **5.0** | Balanced | Moderate | Default, production |
+| **5.5** | Low | Few FPs | High-traffic APIs |
+| **6.0** | Very Low | Minimal | Only catch highly obfuscated |
+
+### Example Detections
+
+```typescript
+// ✅ DETECTED (high entropy)
+"U0VMRUNUICogRlJPTSB1c2VycyBXSEVSRSBpZCA9IDE="  // Base64 SQL injection
+"53454c454354202a2046524f4d207573657273"        // Hex encoded payload
+"\\x53\\x45\\x4c\\x45\\x43\\x54"                      // Hex escape sequences
+
+// ✅ NOT DETECTED (normal text)
+"hello world"                                      // Low entropy
+"john.doe@example.com"                             // Normal email
+"user_id=12345"                                    // Simple parameter
+```
+
+### Combining with Pattern Detectors
+
+Entropy detector is **complementary** to pattern-based detectors:
+
+1. **Pattern detectors** catch known attack signatures
+2. **Entropy detector** catches obfuscated/encoded versions that bypass patterns
+
+```typescript
+// Attacker's evolution:
+"' OR '1'='1"                    // Caught by SQLInjectionDetector
+"JyBPUiAnMSc9JzE="              // Base64 encoded - caught by EntropyDetector
+"\\x27\\x20\\x4f\\x52\\x20\\x27\\x31" // Hex encoded - caught by EntropyDetector
+```
+
+### Performance
+
+- **Overhead**: ~1-2ms per request
+- **Memory**: Minimal (no state)
+- **Recommended**: Enable on endpoints receiving user input
 

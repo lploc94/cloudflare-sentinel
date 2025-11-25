@@ -16,12 +16,14 @@ export enum AttackType {
   SCRAPING = 'scraping',
   RATE_LIMIT_VIOLATION = 'rate_limit_violation',
   SUSPICIOUS_PATTERN = 'suspicious_pattern',
-  // Behavior-based attacks (NEW)
+  // Behavior-based attacks
   RESOURCE_ENUMERATION = 'resource_enumeration',
   LOGIC_ABUSE = 'logic_abuse',
   UNAUTHORIZED_ACCESS_ATTEMPT = 'unauthorized_access_attempt',
   ENDPOINT_PROBING = 'endpoint_probing',
   SEQUENTIAL_FAILURE = 'sequential_failure',
+  // Entropy-based detection
+  OBFUSCATED_PAYLOAD = 'obfuscated_payload',
   UNKNOWN = 'unknown',
   // Wildcard for matching all attacks
   WILDCARD = '*'

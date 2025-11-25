@@ -19,5 +19,8 @@ export { PathTraversalResponseDetector } from './path-traversal.response.detecto
 // Behavior detector (works on both request + response)
 export { BruteForceDetector } from './brute-force.detector';
 
+// Entropy-based detector
+export { EntropyDetector, type EntropyDetectorConfig } from './entropy.detector';
+
 // Export examples (user can reference)
 export * from './custom-example';
