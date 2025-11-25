@@ -24,6 +24,10 @@ export enum AttackType {
   SEQUENTIAL_FAILURE = 'sequential_failure',
   // Entropy-based detection
   OBFUSCATED_PAYLOAD = 'obfuscated_payload',
+  // Injection attacks
+  COMMAND_INJECTION = 'command_injection',
+  SSRF = 'ssrf',
+  NOSQL_INJECTION = 'nosql_injection',
   UNKNOWN = 'unknown',
   // Wildcard for matching all attacks
   WILDCARD = '*'

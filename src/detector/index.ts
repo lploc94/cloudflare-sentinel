@@ -22,5 +22,10 @@ export { BruteForceDetector } from './brute-force.detector';
 // Entropy-based detector
 export { EntropyDetector, type EntropyDetectorConfig } from './entropy.detector';
 
+// Injection detectors
+export { CommandInjectionDetector, type CommandInjectionDetectorConfig } from './command-injection.detector';
+export { SSRFDetector, type SSRFDetectorConfig } from './ssrf.detector';
+export { NoSQLInjectionDetector, type NoSQLInjectionDetectorConfig } from './nosql-injection.detector';
+
 // Export examples (user can reference)
 export * from './custom-example';
