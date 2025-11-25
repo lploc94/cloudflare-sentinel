@@ -92,6 +92,21 @@ const sentinel = new Sentinel({
 });
 ```
 
+Or with endpoint-specific detectors:
+```typescript
+const sentinel = new Sentinel({
+  detectors: {
+    '*': [  // Global detectors
+      new SQLInjectionRequestDetector(),
+      new XSSRequestDetector(),
+    ],
+    '/api/search/*': [  // Endpoint-specific
+      new MyCustomDetector(),
+    ],
+  },
+});
+```
+
 ### Per-Endpoint Limits
 
 ```typescript
@@ -249,8 +264,8 @@ interface SentinelConfig {
   // Attack limits (primary method)
   attackLimits?: Record<string, AttackLimit | Record<string, AttackLimit>>;
   
-  // Detectors (pluggable)
-  detectors?: IDetector[];
+  // Detectors (pluggable) - supports both array and object formats
+  detectors?: IDetector[] | Record<string, IDetector[]>;
   
   // Whitelist
   whitelist?: {

@@ -134,7 +134,7 @@ const sentinel = new Sentinel({
   db: env.DB,
   analytics: env.ANALYTICS,
   
-  // Custom detectors
+  // Custom detectors (array format - backward compatible)
   detectors: [
     new SQLInjectionRequestDetector(),
     new XSSRequestDetector(),

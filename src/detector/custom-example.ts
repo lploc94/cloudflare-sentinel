@@ -201,12 +201,22 @@ export class PriceManipulationDetector extends BaseDetector {
  *   rateLimiter: env.RATE_LIMITER,
  *   analytics: env.ANALYTICS,
  *   
- *   // Register custom detectors
+ *   // Register custom detectors (array format - backward compatible)
  *   detectors: [
  *     new MyCustomDetector(),
  *     new DataLeakDetector(),
  *     new PriceManipulationDetector(),
  *   ],
+ *   
+ *   // Or with endpoint-specific detectors:
+ *   detectors: {
+ *     '*': [  // Global detectors
+ *       new MyCustomDetector(),
+ *     ],
+ *     '/api/sensitive/*': [  // Endpoint-specific
+ *       new DataLeakDetector(),
+ *     ],
+ *   },
  *   
  *   // Configure limits for custom attack types
  *   // Note: Cloudflare Rate Limiting API only supports 10s or 60s periods

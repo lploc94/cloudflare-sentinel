@@ -187,6 +187,14 @@ const sentinel = new Sentinel({
     new MyAttackDetector(),
   ],
 });
+
+// Or with endpoint-specific detectors:
+const sentinel = new Sentinel({
+  detectors: {
+    '*': [new MyAttackDetector()],  // Global
+    '/api/sensitive/*': [new MyAttackDetector()],  // Endpoint-specific
+  },
+});
 ```
 
 Execution order: Priority DESC (100 → 0)

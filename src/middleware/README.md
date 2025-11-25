@@ -110,8 +110,8 @@ interface SentinelConfig {
   // Attack limits (NEW - primary method)
   attackLimits?: Record<string, AttackLimit | Record<string, AttackLimit>>;
   
-  // Detectors (pluggable)
-  detectors?: IDetector[];
+  // Detectors (pluggable) - supports both array and object formats
+  detectors?: IDetector[] | Record<string, IDetector[]>;
   
   // Feature flags
   enableEarlyBlockCheck?: boolean;
