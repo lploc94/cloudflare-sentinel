@@ -203,6 +203,8 @@ const sentinel = new Sentinel({
 ### Security Audit
 
 ```typescript
+import { RateLimitPeriod } from 'cloudflare-sentinel';
+
 const sentinel = new Sentinel({
   detectors: [
     // Full coverage
@@ -215,9 +217,9 @@ const sentinel = new Sentinel({
     new BruteForceDetector(),
   ],
   
-  // Log only - don't block
+  // Log only - don't block (still requires valid period due to API constraints)
   attackLimits: {
-    '*': { limit: 999999, period: 1, logOnly: true },
+    '*': { limit: 999999, period: RateLimitPeriod.TEN_SECONDS, action: 'log_only' },
   },
 });
 ```

@@ -26,6 +26,8 @@ import {
   NotificationManager,
   EmailChannel,
   SlackChannel,
+  // Rate limit period (10s or 60s only)
+  RateLimitPeriod,
 } from 'cloudflare-sentinel';
 
 // Scheduled handler for notifications
@@ -198,37 +200,37 @@ export default {
         new PathTraversalResponseDetector(),
       ],
       
-      // Attack limits
+      // Attack limits (Cloudflare Rate Limiting API only supports 10s or 60s)
       attackLimits: {
-        // Global limits
+        // Global limits - use RateLimitPeriod.ONE_MINUTE (60s) for sustained protection
         sql_injection: {
           limit: 1,
-          period: 604800,  // 7 days
+          period: RateLimitPeriod.ONE_MINUTE,  // 60 seconds
           action: 'block',
         },
         xss: {
-          limit: 5,
-          period: 3600,  // 1 hour
+          limit: 3,
+          period: RateLimitPeriod.ONE_MINUTE,  // 60 seconds
           action: 'block',
         },
         path_traversal: {
-          limit: 3,
-          period: 3600,
+          limit: 2,
+          period: RateLimitPeriod.ONE_MINUTE,  // 60 seconds
           action: 'block',
         },
         
-        // Endpoint-specific limits
+        // Endpoint-specific limits - use RateLimitPeriod.TEN_SECONDS (10s) for burst protection
         '/api/auth/*': {
           brute_force: {
-            limit: 5,
-            period: 300,  // 5 minutes
+            limit: 3,
+            period: RateLimitPeriod.TEN_SECONDS,  // 10 seconds burst protection
             action: 'block',
           },
         },
         '/admin/*': {
           '*': {
-            limit: 10,
-            period: 60,
+            limit: 5,
+            period: RateLimitPeriod.TEN_SECONDS,  // 10 seconds burst protection
             action: 'block',
           },
         },

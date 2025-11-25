@@ -101,11 +101,11 @@ export default {
       db: env.DB,
       analytics: env.ANALYTICS,
       
-      // Attack limits
+      // Attack limits (Cloudflare Rate Limiting API only supports 10s or 60s)
       attackLimits: {
-        sql_injection: { limit: 10, period: 3600, action: 'block' },
-        xss: { limit: 10, period: 3600, action: 'block' },
-        brute_force: { limit: 5, period: 300, action: 'block' },
+        sql_injection: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
+        xss: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
+        brute_force: { limit: 3, period: RateLimitPeriod.TEN_SECONDS, action: 'block' },
       },
     });
 
@@ -126,6 +126,7 @@ import {
   SQLInjectionRequestDetector,
   XSSRequestDetector,
   BruteForceDetector,
+  RateLimitPeriod,
 } from 'cloudflare-sentinel';
 
 const sentinel = new Sentinel({
@@ -140,18 +141,18 @@ const sentinel = new Sentinel({
     new BruteForceDetector(),
   ],
   
-  // Per-endpoint limits
+  // Per-endpoint limits (Cloudflare Rate Limiting API only supports 10s or 60s)
   attackLimits: {
     // Global
-    sql_injection: { limit: 10, period: 3600, action: 'block' },
+    sql_injection: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
     
     // Endpoint-specific
     '/api/admin/*': {
-      '*': { limit: 1, period: 86400, action: 'block' }, // Any attack
+      '*': { limit: 1, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
     },
     
     '/api/auth/*': {
-      brute_force: { limit: 5, period: 300, action: 'block' },
+      brute_force: { limit: 3, period: RateLimitPeriod.TEN_SECONDS, action: 'block' },
     },
   },
 });
@@ -189,14 +190,16 @@ wrangler tail
 Start with `log_only` mode, then enable blocking:
 
 ```typescript
+import { RateLimitPeriod } from 'cloudflare-sentinel';
+
 // Week 1: Monitor only
 attackLimits: {
-  sql_injection: { limit: 100, period: 3600, action: 'log_only' },
+  sql_injection: { limit: 100, period: RateLimitPeriod.ONE_MINUTE, action: 'log_only' },
 }
 
 // Week 2: Enable blocking
 attackLimits: {
-  sql_injection: { limit: 10, period: 3600, action: 'block' },
+  sql_injection: { limit: 10, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
 }
 ```
 

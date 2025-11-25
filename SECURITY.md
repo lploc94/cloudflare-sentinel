@@ -87,10 +87,13 @@ Add Unicode normalization before pattern matching.
 
 1. **Start with `log_only` mode**
    ```typescript
+   import { RateLimitPeriod } from 'cloudflare-sentinel';
+   
+   // Note: Cloudflare Rate Limiting API only supports 10s or 60s periods
    attackLimits: {
      sql_injection: {
        limit: 100,
-       period: 3600,
+       period: RateLimitPeriod.ONE_MINUTE,  // 60 seconds
        action: 'log_only'  // Monitor first!
      }
    }

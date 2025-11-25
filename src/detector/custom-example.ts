@@ -209,15 +209,16 @@ export class PriceManipulationDetector extends BaseDetector {
  *   ],
  *   
  *   // Configure limits for custom attack types
+ *   // Note: Cloudflare Rate Limiting API only supports 10s or 60s periods
  *   attackLimits: {
  *     logic_abuse: {
  *       limit: 3,
- *       period: 3600,  // 3 times per hour
+ *       period: RateLimitPeriod.ONE_MINUTE,  // 3 times per 60s window
  *       action: 'block'
  *     },
  *     suspicious_pattern: {
  *       limit: 10,
- *       period: 300,  // 10 times per 5 minutes
+ *       period: RateLimitPeriod.TEN_SECONDS,  // 10 times per 10s window
  *       action: 'log_only'
  *     }
  *   }

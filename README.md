@@ -27,7 +27,7 @@ npm install cloudflare-sentinel
 ### Basic Usage
 
 ```typescript
-import { Sentinel } from 'cloudflare-sentinel';
+import { Sentinel, RateLimitPeriod } from 'cloudflare-sentinel';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -36,9 +36,10 @@ export default {
       db: env.DB,
       analytics: env.ANALYTICS,
       
+      // Note: Cloudflare Rate Limiting API only supports 10s or 60s periods
       attackLimits: {
-        sql_injection: { limit: 10, period: 3600, action: 'block' },
-        xss: { limit: 10, period: 3600, action: 'block' },
+        sql_injection: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },  // 60s
+        xss: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },            // 60s
       },
     });
 
@@ -94,16 +95,20 @@ const sentinel = new Sentinel({
 ### Per-Endpoint Limits
 
 ```typescript
+import { RateLimitPeriod } from 'cloudflare-sentinel';
+
 attackLimits: {
-  // Global
-  sql_injection: { limit: 10, period: 3600, action: 'block' },
+  // Global - 60s window
+  sql_injection: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
   
-  // Endpoint-specific
+  // Endpoint-specific - 10s burst protection
   '/api/admin/*': {
-    '*': { limit: 1, period: 86400, action: 'block' }, // Any attack
+    '*': { limit: 1, period: RateLimitPeriod.TEN_SECONDS, action: 'block' },
   },
 }
 ```
+
+> **Note**: Cloudflare Rate Limiting API only supports `RateLimitPeriod.TEN_SECONDS` (10s) or `RateLimitPeriod.ONE_MINUTE` (60s).
 
 ### With Notifications
 

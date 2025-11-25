@@ -5,9 +5,10 @@ All notable changes to Cloudflare Sentinel will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1] - 2025-11-25
 
 ### Added
+- `RateLimitPeriod` enum for type-safe rate limiting configuration
 - Comprehensive use cases documentation
 - Detailed limitations section
 - Full contributing guide for developers
@@ -18,9 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated cost estimates with real-world numbers ($0-11/month)
 - Improved README structure with better organization
 - Enhanced examples with more use cases
+- Rate limit periods now use `RateLimitPeriod` enum for better type safety
+  - `RateLimitPeriod.TEN_SECONDS` (10s) - for burst protection
+  - `RateLimitPeriod.ONE_MINUTE` (60s) - for sustained rate limiting
+  - Enforces Cloudflare Rate Limiting API constraints at compile-time
+  - Updated all documentation and examples
 
 ### Fixed
 - Corrected pricing information in README
+- Fixed Cloudflare Rate Limiting API usage - custom periods would fail at runtime, now caught at compile-time
 
 ## [1.0.0] - Initial Release
 

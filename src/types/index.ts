@@ -53,6 +53,17 @@ export enum RateLimitAction {
 }
 
 /**
+ * Rate limit period in seconds
+ * Cloudflare Rate Limiting API only supports 10s or 60s
+ */
+export enum RateLimitPeriod {
+  /** 10 seconds - for burst protection */
+  TEN_SECONDS = 10,
+  /** 60 seconds (1 minute) - for sustained rate limiting */
+  ONE_MINUTE = 60
+}
+
+/**
  * Severity level of security events
  */
 export enum SecuritySeverity {
@@ -87,8 +98,8 @@ export interface Identifier {
 export interface AttackLimit {
   /** Max occurrences allowed */
   limit: number;
-  /** Time period in seconds */
-  period: number;
+  /** Time period - only 10s or 60s supported by Cloudflare Rate Limiting API */
+  period: RateLimitPeriod;
   /** Action: block immediately or log only */
   action: 'block' | 'log_only';
   /** Only log, don't block */
@@ -103,8 +114,8 @@ export interface AttackLimit {
 export interface EndpointLimit {
   /** Max requests allowed */
   limit: number;
-  /** Time period in seconds */
-  period: number;
+  /** Time period - only 10s or 60s supported by Cloudflare Rate Limiting API */
+  period: RateLimitPeriod;
   /** Key extractor */
   keyExtractor?: (request: Request, context?: any) => string | Promise<string>;
 }

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AttackLimiter } from './attack-limiter';
-import { AttackType, IdentifierType } from '../types';
+import { AttackType, IdentifierType, RateLimitPeriod } from '../types';
 import type { SentinelConfig, Identifier } from '../types';
 
 describe('AttackLimiter', () => {
@@ -21,25 +21,25 @@ describe('AttackLimiter', () => {
       attackLimits: {
         sql_injection: {
           limit: 1,
-          period: 604800,
+          period: RateLimitPeriod.ONE_MINUTE,  // 60s
           action: 'block',
         },
         brute_force: {
           limit: 5,
-          period: 300,
+          period: RateLimitPeriod.TEN_SECONDS,  // 10s
           action: 'block',
         },
         '/api/*': {
           brute_force: {
             limit: 20,
-            period: 300,
+            period: RateLimitPeriod.TEN_SECONDS,  // 10s
             action: 'block',
           },
         },
         '/api/admin/*': {
           '*': {
             limit: 1,
-            period: 86400,
+            period: RateLimitPeriod.ONE_MINUTE,  // 60s
             action: 'block',
           },
         },
@@ -236,7 +236,7 @@ describe('AttackLimiter', () => {
         attackLimits: {
           xss: {
             limit: 1,
-            period: 3600,
+            period: RateLimitPeriod.ONE_MINUTE,  // 60s
             action: 'log_only' as const,
           },
         },
