@@ -31,7 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `OpenRedirectDetector` - Open redirect vulnerabilities
   - `CSRFDetector` - Cross-Site Request Forgery
 - **New Handlers**
-  - `BanHandler` - Automatically add IPs to blocklist
   - `BlocklistHandler` - Add to KV blocklist
   - `ReputationHandler` - Update IP reputation score
 - **ML Module** (`src/ml/`) - MurmurHash3, HashingVectorizer, LinearClassifier
@@ -47,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Old `Sentinel` class and `protect()` method
 - `attackLimits` configuration
 - D1 database dependency (now optional)
+- Removed unused components: `WhitelistDetector`, `DataLeakDetector`, `ErrorLeakDetector`, `BanHandler`, `IncrementHandler`, `EscalateHandler`, `HybridAggregator`
+
+### Documentation
+- Sync all docs with actual codebase
+- Fix license text (Cloudflare Only License)
+- Update code examples with correct component names
+- Add `engines` field to package.json (Node >=18)
 
 ## [1.0.4] - 2025-11-25
 

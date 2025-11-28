@@ -99,7 +99,6 @@ export default {
 ### Handlers
 - `LogHandler` - Console/analytics logging
 - `NotifyHandler` - Webhook notifications
-- `BanHandler` - Add to blocklist
 - `BlocklistHandler` - Add to KV blocklist
 - `ReputationHandler` - Update IP reputation score
 
@@ -165,7 +164,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📜 License
 
-MIT © 2025 lploc94
+Cloudflare Only License © 2025 lploc94
+
+See [LICENSE](LICENSE) for details.
 
 ---
 

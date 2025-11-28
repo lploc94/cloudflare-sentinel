@@ -4,7 +4,7 @@ Cloudflare Sentinel - Pipeline-based security middleware for Cloudflare Workers.
 
 ## Design Principles
 
-1. **Everything is a Detector**: Blocklist, Whitelist, RateLimit - all are detectors
+1. **Everything is a Detector**: Blocklist, RateLimit, Reputation - all are detectors
 2. **Pipeline Architecture**: SYNC and ASYNC pipelines with independent flows
 3. **User Control**: SYNC returns Decision, user decides to block/proceed
 4. **Fire & Forget**: ASYNC executes all handlers automatically
@@ -25,14 +25,13 @@ Cloudflare Sentinel - Pipeline-based security middleware for Cloudflare Workers.
 │                             │                    │  (fire & forget)            │
 │  Detectors:                 │                    │                             │
 │  - BlocklistDetector        │                    │  Detectors:                 │
-│  - WhitelistDetector        │                    │  - BehaviorDetector         │
-│  - RateLimitDetector        │                    │  - DeepAIDetector           │
-│  - SqlInjectionDetector     │                    │                             │
-│  - XssDetector              │                    │  Handlers:                  │
-│  - ...                      │                    │  - ReputationHandler        │
+│  - RateLimitDetector        │                    │  - MLDetector               │
+│  - ReputationDetector       │                    │  - EntropyDetector          │
+│                             │                    │                             │
+│  .process(request)          │                    │  Handlers:                  │
+│      → Decision             │                    │  - ReputationHandler        │
 │                             │                    │  - BlocklistHandler         │
-│  .process(request)          │                    │  - AnalyticsHandler         │
-│      → Decision             │                    │                             │
+│                             │                    │  - LogHandler               │
 └──────────────┬──────────────┘                    │  .process(request)          │
                │                                   │      → void                 │
                │                                   └──────────────┬──────────────┘
@@ -53,8 +52,9 @@ Cloudflare Sentinel - Pipeline-based security middleware for Cloudflare Workers.
 │  RESPONSE DETECTION (optional)                                             │
 │                                                                            │
 │  Response Detectors:                                                       │
-│  - DataLeakDetector       (SSN, credit cards, API keys)                    │
-│  - ErrorLeakDetector      (stack traces, debug info)                       │
+│  - SQLInjectionResponseDetector  (SQL error messages)                      │
+│  - XSSResponseDetector           (reflected XSS)                           │
+│  - PathTraversalResponseDetector (file content disclosure)                 │
 │                                                                            │
 │  .processResponse(response) → Decision                                     │
 └───────────────────────────────────┬────────────────────────────────────────┘
@@ -79,23 +79,18 @@ Returns `Decision` - user decides what to do.
 const syncSentinelPipeline = SentinelPipeline.sync([
   // Security detectors (all are just detectors!)
   new BlocklistDetector({ kv: env.BLOCKLIST_KV }),
-  new WhitelistDetector({ ips: ['10.0.0.0/8'] }),
-  new RateLimitDetector({ kv: env.RATE_KV, limit: 100, period: 60 }),
+  new RateLimitDetector({ kv: env.RATE_KV, limit: 100, windowSeconds: 60 }),
+  new ReputationDetector({ kv: env.REPUTATION_KV }),
   
   // Attack detectors
-  new SqlInjectionDetector(),
-  new XssDetector(),
+  new SQLInjectionRequestDetector(),
+  new XSSRequestDetector(),
   new BruteForceDetector(),
-  
-  // Response detectors
-  new DataLeakDetector(),
-  new ErrorLeakDetector(),
 ])
   .score(new MaxScoreAggregator())
   .resolve(new DefaultResolver())
   .on('log', new LogHandler())
-  .on('notify', new SlackHandler())
-  .on('increment_counter', new IncrementHandler(env.RATE_KV));
+  .on('notify', new NotifyHandler({ webhookUrl: env.SLACK_WEBHOOK }));
 ```
 
 ### ASYNC SentinelPipeline
@@ -104,13 +99,12 @@ Returns `void` - executes all handlers automatically.
 
 ```typescript
 const asyncSentinelPipeline = SentinelPipeline.async([
-  new BehaviorDetector(),
-  new DeepAIDetector(),
+  new MLDetector(),
+  new EntropyDetector(),
 ])
   .score(new WeightedAggregator())
-  .resolve(new AnalyticsResolver())
-  .on('log', new AnalyticsHandler())
-  .on('notify', new EmailHandler())
+  .resolve(new MultiLevelResolver({ levels: [...] }))
+  .on('log', new LogHandler())
   .on('update_reputation', new ReputationHandler())
   .on('add_blocklist', new BlocklistHandler());
 ```
@@ -136,31 +130,31 @@ import {
   SentinelPipeline, 
   BlocklistDetector, 
   RateLimitDetector,
-  SqlInjectionDetector,
-  DataLeakDetector,
+  SQLInjectionRequestDetector,
+  SQLInjectionResponseDetector,
   MaxScoreAggregator,
   DefaultResolver,
   LogHandler,
-  IncrementHandler,
+  NotifyHandler,
 } from 'cloudflare-sentinel';
 
 // Define pipelines
 const syncPipeline = SentinelPipeline.sync([
   new BlocklistDetector({ kv: env.BLOCKLIST_KV }),
-  new RateLimitDetector({ kv: env.RATE_KV, limit: 100, period: 60 }),
-  new SqlInjectionDetector(),
-  new DataLeakDetector(),  // Response detector
+  new RateLimitDetector({ kv: env.RATE_KV, limit: 100, windowSeconds: 60 }),
+  new SQLInjectionRequestDetector(),
+  new SQLInjectionResponseDetector(),  // Response detector
 ])
   .score(new MaxScoreAggregator())
   .resolve(new DefaultResolver())
   .on('log', new LogHandler())
-  .on('increment_counter', new IncrementHandler(env.RATE_KV));
+  .on('notify', new NotifyHandler({ webhookUrl: env.SLACK_WEBHOOK }));
 
 const asyncPipeline = SentinelPipeline.async([
-  new BehaviorDetector(),
+  new MLDetector(),
 ])
   .score(new WeightedAggregator())
-  .resolve(new AnalyticsResolver())
+  .resolve(new MultiLevelResolver({ levels: [...] }))
   .on('update_reputation', new ReputationHandler());
 
 // Worker
@@ -219,20 +213,6 @@ class BlocklistDetector extends BaseDetector {
   }
 }
 
-// Whitelist - skip checks if whitelisted
-class WhitelistDetector extends BaseDetector {
-  name = 'whitelist';
-  phase = 'request';
-  
-  async detectRequest(ctx) {
-    const ip = ctx.request.headers.get('cf-connecting-ip');
-    if (this.whitelist.includes(ip)) {
-      return this.createResult(false, -100, { skip: true });  // Negative = safe
-    }
-    return this.createResult(false, 0);
-  }
-}
-
 // Rate Limit - check and flag for increment
 class RateLimitDetector extends BaseDetector {
   name = 'rate_limit';
@@ -278,62 +258,17 @@ class BruteForceDetector extends BaseDetector {
   // ...
 }
 
-// Prompt Injection
-class PromptInjectionDetector extends BaseDetector {
-  name = 'prompt_injection';
-  phase = 'request';
-  // ...
-}
 ```
 
 ### Response Detectors
 
-```typescript
-// Data Leak - detect sensitive data in response
-class DataLeakDetector extends BaseDetector {
-  name = 'data_leak';
-  phase = 'response';
-  
-  async detectResponse(ctx) {
-    const body = await ctx.response.text();
-    const patterns = [
-      /\b\d{3}-\d{2}-\d{4}\b/,           // SSN
-      /\b\d{16}\b/,                       // Credit card
-      /password["\s:=]+["']?[^"'\s]+/i,   // Passwords
-      /api[_-]?key["\s:=]+["']?[^"'\s]+/i // API keys
-    ];
-    
-    for (const pattern of patterns) {
-      if (pattern.test(body)) {
-        return this.createResult(true, 90, { reason: 'sensitive_data_leak' });
-      }
-    }
-    return this.createResult(false, 0);
-  }
-}
+Response detectors analyze origin responses for security issues:
 
-// Error Leak - detect stack traces, debug info
-class ErrorLeakDetector extends BaseDetector {
-  name = 'error_leak';
-  phase = 'response';
-  
-  async detectResponse(ctx) {
-    const body = await ctx.response.text();
-    const patterns = [
-      /at\s+\w+\s+\([^)]+:\d+:\d+\)/,     // Stack trace
-      /Error:.*\n\s+at/,                   // Error with stack
-      /SQLSTATE\[/,                        // SQL errors
-    ];
-    
-    for (const pattern of patterns) {
-      if (pattern.test(body)) {
-        return this.createResult(true, 70, { reason: 'error_leak' });
-      }
-    }
-    return this.createResult(false, 0);
-  }
-}
-```
+- **SQLInjectionResponseDetector** - Detect SQL error messages in responses
+- **XSSResponseDetector** - Detect reflected XSS patterns
+- **PathTraversalResponseDetector** - Detect file content disclosure
+
+See `src/detector/` for implementation details.
 
 ---
 
@@ -383,7 +318,7 @@ interface ResolverContext {
   request: Request;
 }
 
-// Built-in: DefaultResolver, StrictResolver, LenientResolver
+// Built-in: DefaultResolver, StrictResolver, LenientResolver, MultiLevelResolver
 ```
 
 ### Handler Interface
@@ -394,7 +329,7 @@ interface IActionHandler {
   execute(action: Action, ctx: HandlerContext): Promise<void>;
 }
 
-// Built-in: LogHandler, NotifyHandler, ReputationHandler, BlocklistHandler, IncrementHandler
+// Built-in: LogHandler, NotifyHandler, ReputationHandler, BlocklistHandler
 ```
 
 ---
@@ -477,14 +412,27 @@ cloudflare-sentinel/
 │   │   ├── base.ts                       # BaseDetector
 │   │   ├── index.ts
 │   │   ├── blocklist.detector.ts
-│   │   ├── whitelist.detector.ts
 │   │   ├── rate-limit.detector.ts
+│   │   ├── reputation.detector.ts
 │   │   ├── sql-injection.request.detector.ts
 │   │   ├── sql-injection.response.detector.ts
 │   │   ├── xss.request.detector.ts
 │   │   ├── xss.response.detector.ts
+│   │   ├── path-traversal.request.detector.ts
+│   │   ├── path-traversal.response.detector.ts
+│   │   ├── command-injection.detector.ts
+│   │   ├── ssrf.detector.ts
+│   │   ├── nosql-injection.detector.ts
+│   │   ├── xxe.detector.ts
+│   │   ├── ssti.detector.ts
+│   │   ├── jwt.detector.ts
+│   │   ├── csrf.detector.ts
+│   │   ├── http-smuggling.detector.ts
+│   │   ├── open-redirect.detector.ts
 │   │   ├── brute-force.detector.ts
 │   │   ├── entropy.detector.ts
+│   │   ├── failure-threshold.detector.ts
+│   │   ├── ml.detector.ts
 │   │   └── _examples.ts                  # Custom detector examples
 │   │
 │   ├── scoring/
@@ -492,8 +440,7 @@ cloudflare-sentinel/
 │   │   ├── types.ts
 │   │   ├── index.ts
 │   │   ├── max.aggregator.ts
-│   │   ├── weighted.aggregator.ts
-│   │   └── hybrid.aggregator.ts
+│   │   └── weighted.aggregator.ts
 │   │
 │   ├── resolver/
 │   │   ├── base.ts
@@ -509,9 +456,8 @@ cloudflare-sentinel/
 │   │   ├── index.ts
 │   │   ├── log.handler.ts
 │   │   ├── notify.handler.ts
-│   │   ├── increment.handler.ts
-│   │   ├── escalate.handler.ts
-│   │   └── ban.handler.ts
+│   │   ├── blocklist.handler.ts
+│   │   └── reputation.handler.ts
 │   │
 │   ├── types/
 │   │   └── index.ts                      # AttackType, SecuritySeverity
@@ -532,14 +478,14 @@ cloudflare-sentinel/
 | Phase | Method | Returns | Description |
 |-------|--------|---------|-------------|
 | **Request** | `.process(request)` | `Decision` (sync) / `void` (async) | Detect attacks |
-| **Response** | `.processResponse(response)` | `Decision` | Detect data leaks |
+| **Response** | `.processResponse(response)` | `Decision` | Detect response issues |
 
 | Component | Interface | Built-in | Description |
 |-----------|-----------|----------|-------------|
-| **Detector** | `IDetector` | Blocklist, Whitelist, RateLimit, SQLi, XSS, DataLeak... | Analyze request/response |
-| **Aggregator** | `IScoreAggregator` | Max, Weighted, Hybrid | Combine results |
-| **Resolver** | `IActionResolver` | Default, Strict, Lenient | Score → Actions |
-| **Handler** | `IActionHandler` | Log, Notify, Reputation, Blocklist, Increment | Execute actions |
+| **Detector** | `IDetector` | Blocklist, RateLimit, Reputation, SQLi, XSS, SSRF, XXE... | Analyze request/response |
+| **Aggregator** | `IScoreAggregator` | Max, Weighted | Combine results |
+| **Resolver** | `IActionResolver` | Default, Strict, Lenient, MultiLevel | Score → Actions |
+| **Handler** | `IActionHandler` | Log, Notify, Reputation, Blocklist | Execute actions |
 
 ---
 

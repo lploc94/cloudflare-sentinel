@@ -58,7 +58,7 @@ import {
   MaxScoreAggregator,
   MultiLevelResolver,
   LogHandler,
-  IncrementHandler,
+  NotifyHandler,
 } from 'cloudflare-sentinel';
 
 export default {
@@ -66,20 +66,20 @@ export default {
     // Build pipeline
     const pipeline = SentinelPipeline.sync([
       new BlocklistDetector({ kv: env.BLOCKLIST_KV }),
-      new RateLimitDetector({ kv: env.RATE_LIMIT_KV, limit: 100, period: 60 }),
+      new RateLimitDetector({ kv: env.RATE_LIMIT_KV, limit: 100, windowSeconds: 60 }),
       new SQLInjectionRequestDetector(),
       new XSSRequestDetector(),
     ])
       .score(new MaxScoreAggregator())
       .resolve(new MultiLevelResolver({
         levels: [
-          { maxScore: 30, actions: ['increment'] },
-          { maxScore: 60, actions: ['log'] },
-          { maxScore: 100, actions: ['block'] },
+          { maxScore: 30, actions: ['log'] },
+          { maxScore: 60, actions: ['log', 'warn'] },
+          { maxScore: 100, actions: ['block', 'notify'] },
         ],
       }))
-      .on('increment', new IncrementHandler({ kv: env.RATE_LIMIT_KV }))
-      .on('log', new LogHandler({ console: true }));
+      .on('log', new LogHandler({ console: true }))
+      .on('notify', new NotifyHandler({ webhookUrl: env.SLACK_WEBHOOK }));
 
     // Process request
     const decision = await pipeline.process(request, { env, ctx });
@@ -141,14 +141,13 @@ Configure different actions per threat level:
 ```typescript
 new MultiLevelResolver({
   levels: [
-    { maxScore: 30, actions: ['increment'] },           // Low: count only
-    { maxScore: 60, actions: ['log', 'escalate'] },     // Medium: log + track
+    { maxScore: 30, actions: ['log'] },                 // Low: log only
+    { maxScore: 60, actions: ['log', 'warn'] },         // Medium: log + warn
     { maxScore: 100, actions: ['block', 'notify'] },    // High: block + alert
   ],
 })
-```
 
-Actions cascade - level 3 executes: increment + log + escalate + block + notify.
+Actions cascade - level 3 executes: log + warn + block + notify.
 
 ## Route-Based Config
 

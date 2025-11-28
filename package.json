@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-sentinel",
-  "version": "1.0.4",
+  "version": "2.0.0",
   "description": "Attack detection and rate limiting middleware for Cloudflare Workers - Pluggable detector system with layered rate limiting",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -49,6 +49,9 @@
   ],
   "author": "lploc94",
   "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/lploc94/cloudflare-sentinel.git"
