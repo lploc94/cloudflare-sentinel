@@ -5,29 +5,39 @@
  * Catches query operators, JavaScript injection, and common payloads.
  */
 
-import { BaseDetector } from './base';
+import { BaseDetector, type BaseDetectorOptions } from './base';
 import type { DetectorResult } from './base';
 import { AttackType, SecuritySeverity } from '../types';
 
-export interface NoSQLInjectionDetectorConfig {
+/** Pattern definition for NoSQL injection */
+export interface NoSQLPattern {
+  pattern: RegExp;
+  description: string;
+  severity: SecuritySeverity;
+  /** How certain this pattern indicates an attack (0-1) */
+  confidence: number;
+}
+
+export interface NoSQLInjectionDetectorConfig extends BaseDetectorOptions {
   /** Enable/disable detector */
   enabled?: boolean;
   /** Priority (0-100, higher = checked first) */
   priority?: number;
-  /** Paths to exclude from detection */
-  excludePaths?: string[];
-  /** Fields to exclude from checking */
+  /** Fields to exclude from checking (exact match) */
   excludeFields?: string[];
+  /** Custom patterns - if provided, OVERRIDES all built-in patterns */
+  patterns?: NoSQLPattern[];
 }
 
 // MongoDB query operators that could be malicious
 // IMPORTANT: Order matters - CRITICAL patterns should be checked first
-const MONGODB_OPERATORS: Array<{ pattern: RegExp; description: string; severity: SecuritySeverity }> = [
-  // Always true conditions (authentication bypass) - CHECK FIRST
+const MONGODB_OPERATORS: NoSQLPattern[] = [
+  // Always true conditions (authentication bypass) - very specific pattern
   {
     pattern: /["']?\$(?:ne|gt|gte)["']?\s*:\s*["']?["']?\s*[}\]]/i,
     description: 'Always-true condition (auth bypass)',
     severity: SecuritySeverity.CRITICAL,
+    confidence: 0.95,  // Very specific pattern
   },
   
   // Where clause (JavaScript execution)
@@ -35,6 +45,15 @@ const MONGODB_OPERATORS: Array<{ pattern: RegExp; description: string; severity:
     pattern: /["']?\$where["']?\s*:/i,
     description: 'MongoDB $where clause (JavaScript execution)',
     severity: SecuritySeverity.CRITICAL,
+    confidence: 0.9,  // Could be legitimate in some admin tools
+  },
+  
+  // Update operators (data modification)
+  {
+    pattern: /["']?\$(?:set|unset|inc|push|pull|addToSet|pop|rename)["']?\s*:/i,
+    description: 'MongoDB update operator',
+    severity: SecuritySeverity.CRITICAL,
+    confidence: 0.85,  // Could be legitimate in some APIs
   },
   
   // Comparison operators (dangerous when user-controlled)
@@ -42,6 +61,7 @@ const MONGODB_OPERATORS: Array<{ pattern: RegExp; description: string; severity:
     pattern: /["']?\$(?:eq|ne|gt|gte|lt|lte|in|nin)["']?\s*:/i,
     description: 'MongoDB comparison operator',
     severity: SecuritySeverity.HIGH,
+    confidence: 0.7,  // Common in query strings, need context
   },
   
   // Logical operators
@@ -49,13 +69,7 @@ const MONGODB_OPERATORS: Array<{ pattern: RegExp; description: string; severity:
     pattern: /["']?\$(?:and|or|not|nor)["']?\s*:/i,
     description: 'MongoDB logical operator',
     severity: SecuritySeverity.HIGH,
-  },
-  
-  // Update operators (data modification) - CRITICAL, check before HIGH patterns
-  {
-    pattern: /["']?\$(?:set|unset|inc|push|pull|addToSet|pop|rename)["']?\s*:/i,
-    description: 'MongoDB update operator',
-    severity: SecuritySeverity.CRITICAL,
+    confidence: 0.7,
   },
   
   // Regex injection
@@ -63,6 +77,7 @@ const MONGODB_OPERATORS: Array<{ pattern: RegExp; description: string; severity:
     pattern: /["']?\$regex["']?\s*:/i,
     description: 'MongoDB regex injection',
     severity: SecuritySeverity.HIGH,
+    confidence: 0.75,
   },
   
   // Evaluation operators (dangerous)
@@ -70,6 +85,7 @@ const MONGODB_OPERATORS: Array<{ pattern: RegExp; description: string; severity:
     pattern: /["']?\$(?:expr|jsonSchema|mod|text)["']?\s*:/i,
     description: 'MongoDB evaluation operator',
     severity: SecuritySeverity.HIGH,
+    confidence: 0.8,
   },
   
   // Aggregation operators
@@ -77,6 +93,7 @@ const MONGODB_OPERATORS: Array<{ pattern: RegExp; description: string; severity:
     pattern: /["']?\$(?:lookup|graphLookup|merge|out)["']?\s*:/i,
     description: 'MongoDB aggregation operator',
     severity: SecuritySeverity.HIGH,
+    confidence: 0.8,
   },
   
   // Type confusion
@@ -84,23 +101,18 @@ const MONGODB_OPERATORS: Array<{ pattern: RegExp; description: string; severity:
     pattern: /["']?\$type["']?\s*:/i,
     description: 'MongoDB type operator',
     severity: SecuritySeverity.MEDIUM,
+    confidence: 0.5,  // Often legitimate
   },
 ];
 
 // JavaScript injection patterns (for $where, $function, etc.)
-const JS_INJECTION_PATTERNS: Array<{ pattern: RegExp; description: string; severity: SecuritySeverity }> = [
-  // Function execution
+const JS_INJECTION_PATTERNS: NoSQLPattern[] = [
+  // Function execution - very specific
   {
     pattern: /function\s*\([^)]*\)\s*\{/i,
     description: 'JavaScript function definition',
     severity: SecuritySeverity.CRITICAL,
-  },
-  
-  // Sleep/DoS attacks
-  {
-    pattern: /sleep\s*\(\d+\)/i,
-    description: 'JavaScript sleep (DoS attack)',
-    severity: SecuritySeverity.HIGH,
+    confidence: 0.95,  // Very specific
   },
   
   // Process/require (RCE)
@@ -108,13 +120,7 @@ const JS_INJECTION_PATTERNS: Array<{ pattern: RegExp; description: string; sever
     pattern: /(?:process|require|eval|exec)\s*\(/i,
     description: 'JavaScript dangerous function',
     severity: SecuritySeverity.CRITICAL,
-  },
-  
-  // this.password/this.username extraction
-  {
-    pattern: /this\.(password|username|email|token|secret)/i,
-    description: 'Field extraction via this reference',
-    severity: SecuritySeverity.HIGH,
+    confidence: 0.95,
   },
   
   // Return true (auth bypass)
@@ -122,16 +128,34 @@ const JS_INJECTION_PATTERNS: Array<{ pattern: RegExp; description: string; sever
     pattern: /return\s+true/i,
     description: 'Return true (auth bypass)',
     severity: SecuritySeverity.CRITICAL,
+    confidence: 0.9,
+  },
+  
+  // Sleep/DoS attacks
+  {
+    pattern: /sleep\s*\(\d+\)/i,
+    description: 'JavaScript sleep (DoS attack)',
+    severity: SecuritySeverity.HIGH,
+    confidence: 0.9,
+  },
+  
+  // this.password/this.username extraction
+  {
+    pattern: /this\.(password|username|email|token|secret)/i,
+    description: 'Field extraction via this reference',
+    severity: SecuritySeverity.HIGH,
+    confidence: 0.85,
   },
 ];
 
 // Common NoSQL injection payloads
-const NOSQL_PAYLOADS: Array<{ pattern: RegExp; description: string; severity: SecuritySeverity }> = [
-  // JSON object injection
+const NOSQL_PAYLOADS: NoSQLPattern[] = [
+  // JSON object injection - specific pattern
   {
     pattern: /\{\s*["']?\$[a-z]+["']?\s*:/i,
     description: 'JSON object with MongoDB operator',
     severity: SecuritySeverity.HIGH,
+    confidence: 0.8,
   },
   
   // Array with operator
@@ -139,37 +163,71 @@ const NOSQL_PAYLOADS: Array<{ pattern: RegExp; description: string; severity: Se
     pattern: /\[\s*\{\s*["']?\$[a-z]+/i,
     description: 'Array with MongoDB operator',
     severity: SecuritySeverity.HIGH,
+    confidence: 0.8,
   },
   
-  // Empty object injection (bypass)
+  // Empty object injection (bypass) - very common false positive
   {
     pattern: /\{\s*\}/,
     description: 'Empty object (potential bypass)',
     severity: SecuritySeverity.LOW,
+    confidence: 0.2,  // Very low - often legitimate
   },
   
-  // Null injection
+  // Null injection - often legitimate
   {
     pattern: /["']?\s*:\s*null\s*[,}]/i,
     description: 'Null value injection',
     severity: SecuritySeverity.LOW,
+    confidence: 0.1,  // Very low - very common in normal JSON
   },
 ];
 
+/**
+ * NoSQLInjectionDetector - Detect NoSQL injection attempts
+ * 
+ * Primarily targets MongoDB. Catches query operators, JavaScript injection,
+ * and common payloads.
+ * 
+ * @example
+ * ```typescript
+ * // Basic usage - built-in patterns
+ * new NoSQLInjectionDetector({})
+ * 
+ * // Custom exclude fields
+ * new NoSQLInjectionDetector({
+ *   excludeFields: ['password', 'hash'],
+ * })
+ * 
+ * // Override with custom patterns
+ * new NoSQLInjectionDetector({
+ *   patterns: [
+ *     { pattern: /\$where/i, description: 'Where clause', severity: SecuritySeverity.CRITICAL },
+ *   ],
+ * })
+ * ```
+ */
 export class NoSQLInjectionDetector extends BaseDetector {
-  name = 'nosql_injection';
+  name = 'nosql-injection';
+  phase = 'request' as const;
   priority: number;
   enabled: boolean;
   
   private config: NoSQLInjectionDetectorConfig;
-  private excludePathPatterns: RegExp[];
+  private activePatterns: NoSQLPattern[];
+
+  /** Built-in patterns - all MongoDB operators, JS injection, and payloads */
+  static readonly PATTERNS: NoSQLPattern[] = [
+    ...MONGODB_OPERATORS,
+    ...JS_INJECTION_PATTERNS,
+    ...NOSQL_PAYLOADS,
+  ];
 
   constructor(config: NoSQLInjectionDetectorConfig = {}) {
     super();
     this.config = {
       enabled: true,
-      priority: 80,  // High priority
-      excludePaths: [],
+      priority: 80,
       excludeFields: ['password', 'token', 'secret', 'key'],
       ...config,
     };
@@ -177,23 +235,12 @@ export class NoSQLInjectionDetector extends BaseDetector {
     this.priority = this.config.priority!;
     this.enabled = this.config.enabled!;
     
-    // Compile exclude path patterns
-    this.excludePathPatterns = (this.config.excludePaths || []).map(p => {
-      const regexPattern = p
-        .replace(/\*\*/g, '.*')
-        .replace(/\*/g, '[^/]*')
-        .replace(/\?/g, '.');
-      return new RegExp(`^${regexPattern}$`);
-    });
+    // Use custom patterns if provided, otherwise built-in
+    this.activePatterns = config.patterns ?? NoSQLInjectionDetector.PATTERNS;
   }
 
   async detectRequest(request: Request, context: any): Promise<DetectorResult | null> {
     const url = new URL(request.url);
-    
-    // Check if path is excluded
-    if (this.isPathExcluded(url.pathname)) {
-      return null;
-    }
     
     // Check query parameters
     for (const [key, value] of url.searchParams) {
@@ -242,14 +289,11 @@ export class NoSQLInjectionDetector extends BaseDetector {
     return null;
   }
 
-  private isPathExcluded(path: string): boolean {
-    return this.excludePathPatterns.some(pattern => pattern.test(path));
-  }
-
   private isFieldExcluded(field: string): boolean {
     const lowerField = field.toLowerCase();
+    // Exact match only
     return (this.config.excludeFields || []).some(f => 
-      lowerField === f.toLowerCase() || lowerField.includes(f.toLowerCase())
+      lowerField === f.toLowerCase()
     );
   }
 
@@ -261,68 +305,26 @@ export class NoSQLInjectionDetector extends BaseDetector {
       return null;
     }
     
-    // Check MongoDB operators
-    for (const { pattern, description, severity } of MONGODB_OPERATORS) {
-      if (pattern.test(value)) {
-        return this.createResult(
-          AttackType.NOSQL_INJECTION,
-          severity,
-          severity === SecuritySeverity.CRITICAL ? 0.95 : 0.85,
-          {
-            field: location,
-            value: value.substring(0, 200),
-            pattern: pattern.source,
-          },
-          {
-            detector: this.name,
-            description,
-            type: 'mongodb_operator',
-          },
-        );
-      }
-    }
-    
-    // Check JavaScript injection
-    for (const { pattern, description, severity } of JS_INJECTION_PATTERNS) {
-      if (pattern.test(value)) {
-        return this.createResult(
-          AttackType.NOSQL_INJECTION,
-          severity,
-          severity === SecuritySeverity.CRITICAL ? 0.95 : 0.85,
-          {
-            field: location,
-            value: value.substring(0, 200),
-            pattern: pattern.source,
-          },
-          {
-            detector: this.name,
-            description,
-            type: 'javascript_injection',
-          },
-        );
-      }
-    }
-    
-    // Check common payloads
-    for (const { pattern, description, severity } of NOSQL_PAYLOADS) {
+    // Check all active patterns
+    for (const { pattern, description, severity, confidence } of this.activePatterns) {
       if (pattern.test(value)) {
         // Skip low severity for short strings (likely false positives)
         if (severity === SecuritySeverity.LOW && value.length < 10) continue;
         
+        // Use baseConfidence if provided, otherwise use pattern's confidence
+        const finalConfidence = this.config.baseConfidence ?? confidence;
+        
         return this.createResult(
           AttackType.NOSQL_INJECTION,
           severity,
-          severity === SecuritySeverity.HIGH ? 0.8 : 0.6,
+          finalConfidence,
           {
             field: location,
             value: value.substring(0, 200),
             pattern: pattern.source,
+            rawContent: `Matched: ${description}`,
           },
-          {
-            detector: this.name,
-            description,
-            type: 'nosql_payload',
-          },
+          { matchedPattern: description },
         );
       }
     }

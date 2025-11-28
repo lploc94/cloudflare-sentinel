@@ -1,226 +1,206 @@
 # Sentinel Proxy
 
-Reverse proxy example with full Sentinel protection for existing websites.
+Security reverse proxy for protecting legacy websites without modifying backend code.
 
-Protects legacy PHP sites, WordPress, or any website without code changes.
+## Overview
+
+Sentinel Proxy sits between users and your origin server, inspecting all traffic for attacks and blocking malicious requests before they reach your backend.
+
+```
+User → Sentinel Proxy → Origin Website
+           │
+           ├─ Blocklist Check
+           ├─ Rate Limit Check
+           ├─ SQL Injection Detection
+           ├─ XSS Detection
+           ├─ Path Traversal Detection
+           └─ Response Leak Detection
+```
 
 ## Quick Start
 
 ### 1. Install
+
 ```bash
+cd examples/sentinel-proxy
 npm install
 ```
 
-### 2. Setup D1
-```bash
-wrangler d1 create sentinel
-# Copy database_id to wrangler.toml
+### 2. Create KV Namespaces
 
-wrangler d1 execute sentinel --file=schema.sql
+```bash
+wrangler kv:namespace create BLOCKLIST_KV
+wrangler kv:namespace create RATE_LIMIT_KV
+wrangler kv:namespace create REPUTATION_KV
+wrangler kv:namespace create ESCALATION_KV
 ```
 
-### 3. Setup KV
-```bash
-wrangler kv:namespace create BEHAVIOR_KV
-# Copy id to wrangler.toml
-```
-
-### 4. Setup R2 (Optional - for log archiving)
-```bash
-wrangler r2 bucket create sentinel-archives
-```
-
-### 5. Config
+### 3. Configure
 
 Edit `wrangler.toml`:
+
 ```toml
 [vars]
-ORIGIN_URL = "https://example.com"  # Website to protect
+ORIGIN_URL = "https://your-backend.com"
 
-# Optional - Performance & Reliability
-ORIGIN_TIMEOUT = "30"           # Timeout in seconds (default: 30)
-MAX_REQUEST_SIZE = "10485760"   # Max size in bytes (default: 10MB)
-ENABLE_STATIC_CACHE = "true"    # Cache static assets
+[[kv_namespaces]]
+binding = "BLOCKLIST_KV"
+id = "<id-from-step-2>"
 
-# Optional - Attack Notifications (NEW!)
-EMAIL_ENABLED = "true"
-RESEND_API_KEY = "re_xxxxx"     # Get from https://resend.com
-EMAIL_TO = "admin@company.com"
-SLACK_ENABLED = "true"
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/xxx"
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "<id-from-step-2>"
+
+[[kv_namespaces]]
+binding = "REPUTATION_KV"
+id = "<id-from-step-2>"
+
+[[kv_namespaces]]
+binding = "ESCALATION_KV"
+id = "<id-from-step-2>"
 ```
 
-**📢 Attack Notifications Setup (Optional):**
+### 4. Deploy
 
-See [../../docs/notifications.md](../../docs/notifications.md) for complete guide.
-
-Quick setup:
-1. Get Resend API key: https://resend.com/api-keys
-2. Get Slack webhook: https://api.slack.com/messaging/webhooks
-3. Add config to wrangler.toml (see above)
-4. Add cron triggers for scheduled reports
-
-### 6. Deploy
 ```bash
-npm run deploy
+wrangler deploy
 ```
 
-### 7. Connect Domain to Worker (REQUIRED!)
+### 5. Point Domain
 
-**Option A: Custom Domain** (Recommended)
-
-Cloudflare Dashboard:
-1. Workers & Pages > sentinel-proxy
-2. Settings > Triggers > Custom Domains
-3. Click "Add Custom Domain"
-4. Enter: `yourdomain.com`
-5. Click "Add domain"
-
-✅ Done! Traffic automatically routes through worker.
-
-**Option B: Routes** (Alternative)
-
-Uncomment in `wrangler.toml` BEFORE deploy:
 ```toml
 routes = [
-  { pattern = "yourdomain.com/*", zone_name = "yourdomain.com" }
+  { pattern = "your-domain.com/*", zone_name = "your-domain.com" }
 ]
 ```
 
-**⚠️ Important**: 
-- Without this step → traffic does NOT go through worker → website is NOT protected!
-- `yourdomain.com` must already be in Cloudflare
-- DNS settings don't need changes (Cloudflare auto-routes)
+## Architecture
+
+```
+User → Sentinel Proxy → Origin
+           │
+           ├─ Route Matching (sentinel.config.ts)
+           ├─ Detector Pipeline
+           ├─ Multi-Level Thresholds
+           └─ Action Handlers
+```
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `wrangler.toml` | KV bindings, origin URL |
+| `sentinel.config.ts` | Routes, detectors, thresholds |
+| `src/index.ts` | Entry point (no changes needed) |
+| `src/lib/*` | Internal pipeline logic |
+
+## Route-Based Protection
+
+Configure in `sentinel.config.ts`:
+
+| Route | Thresholds | Detectors |
+|-------|------------|-----------|
+| `/login` | STRICT | basic + BruteForce + Entropy |
+| `/admin/**` | STRICT | basic + Entropy |
+| `/api/**` | STANDARD | basic + RateLimit |
+| `/search` | RELAXED | basic + Entropy |
+| `/static/**` | skip | none |
+
+## Customization
+
+Edit `src/sentinel.config.ts` to customize:
+
+```typescript
+// Define reusable detector sets
+const basic = [
+  new BlocklistDetector({ kv: env.BLOCKLIST_KV }),
+  new SQLInjectionRequestDetector(),
+  new XSSRequestDetector(),
+];
+
+// Configure thresholds with cascading actions
+const STRICT = [
+  { maxScore: 20, actions: ['increment'] },
+  { maxScore: 40, actions: ['log', 'escalate'] },
+  { maxScore: 100, actions: ['block', 'notify'] },
+];
+
+return {
+  global: {
+    detectors: [...basic, new RateLimitDetector(...)],
+    thresholds: STANDARD,
+  },
+  routes: {
+    '/login': {
+      detectors: [...basic, new BruteForceDetector()],
+      thresholds: STRICT,
+    },
+  },
+};
+```
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ORIGIN_URL` | | - | Backend URL |
+| `DEBUG` | | `false` | Debug logging |
+| `ORIGIN_TIMEOUT` | | `30` | Timeout in seconds |
+| `ENABLE_RESPONSE_DETECTION` | | `false` | Check responses for leaks |
+| `ENABLE_ASYNC_PIPELINE` | | `false` | Background processing |
+| `SLACK_WEBHOOK` | | - | Notifications |
+
+## Endpoints
+
+| Path | Description |
+|------|-------------|
+| `/__sentinel/health` | Health check |
 
 ## How It Works
 
 ```
-User Request
-    ↓
-Cloudflare Worker (Sentinel Proxy)
-    ↓
-├─ Attack Detection (SQL, XSS, Path Traversal, Brute Force)
-├─ Rate Limiting  
-├─ Behavior Tracking
-├─ Logging (D1 + Analytics)
-│
-├─ If Attack → Block (403)
-│
-└─ If Clean → Proxy to Origin
-         ↓
-    Your Website (protected!)
+Request
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      SENTINEL PROXY                         │
+│                                                             │
+│  1. Route Matching → Select Pipeline                        │
+│     /api/auth/* → authSync (strict)                         │
+│     /admin/* → adminSync (very strict)                      │
+│     * → globalSync (default)                                │
+│                                                             │
+│  2. Request Detection                                       │
+│     BlocklistDetector → RateLimitDetector → AttackDetectors │
+│                                                             │
+│  3. Decision                                                │
+│     Block? → 403 Response                                   │
+│     Allow? → Continue to origin                             │
+│                                                             │
+│  4. Proxy to Origin                                         │
+│     Add X-Forwarded-* headers                               │
+│     Handle timeouts                                         │
+│                                                             │
+│  5. Response Detection (optional)                           │
+│     Check for data leaks                                    │
+│                                                             │
+│  6. Return secured response                                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Features
+## Security Features
 
-✅ **Flexible Detection** (Request + Response scanning):
-   - SQL injection (requests + error leaks in responses)
-   - XSS (requests + reflected XSS in responses)
-   - Path traversal (requests + file/directory leaks)
-   - Brute force (login patterns)
-   - **Configurable**: Enable/disable specific detectors
-   
-✅ Rate limiting (global + endpoint-specific)  
-✅ Behavior tracking (detect attack patterns)  
-✅ Auto-logging to D1 + Analytics  
-✅ Auto-cleanup (weekly cron with R2 backup)  
-✅ **Metrics endpoint** (`/__sentinel/metrics`) - real-time monitoring  
-✅ **Production-ready**:
-   - Origin timeout protection (configurable)
-   - Request size limits (prevent memory exhaustion)
-   - Error handling (502/504 responses)
-   - Static asset caching (optional)
-✅ Zero config - just deploy  
-✅ No code changes needed on origin site
+- **Blocklist**: Auto-block repeat offenders
+- **Rate Limiting**: Per-IP request limits
+- **SQL Injection**: Pattern-based detection
+- **XSS**: Cross-site scripting detection
+- **Path Traversal**: Directory traversal detection
+- **SSRF**: Server-side request forgery detection
+- **NoSQL Injection**: MongoDB injection detection
+- **Command Injection**: Shell command detection
+- **Entropy Analysis**: Obfuscated payload detection
+- **Response Leak Detection**: Prevent data exposure
 
-## Detector Configuration
+## License
 
-This worker uses **separate request/response detectors** for flexibility:
-
-```typescript
-detectors: [
-  // Request scanning (before origin)
-  new SQLInjectionRequestDetector(),
-  new XSSRequestDetector(),
-  new PathTraversalRequestDetector(),
-  new BruteForceDetector(),
-  
-  // Response scanning (after origin)
-  new SQLInjectionResponseDetector(),
-  new XSSResponseDetector(),
-  new PathTraversalResponseDetector(),
-]
-```
-
-**Can customize**:
-- Remove response detectors → faster, but misses leaks
-- Remove request detectors → monitoring only
-- Add custom detectors → extend protection
-
-See [Detector Guide](../../docs/detectors.md) for more about custom detectors.
-
----
-
-## 🎯 Use Cases
-
-
-## �� Monitoring
-
-### Metrics Endpoint
-
-```bash
-curl https://yourdomain.com/__sentinel/metrics
-```
-
-Returns JSON with attacks, performance, cache stats.
-
-**Protect with Cloudflare Zero Trust** - Don't expose publicly!
-
----
-
-## 🎛️ Configuration Reference
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ORIGIN_URL` | Required | Website to protect |
-| `ORIGIN_TIMEOUT` | 30 | Origin timeout (seconds) |
-| `MAX_REQUEST_SIZE` | 10485760 | Max request size (bytes) |
-| `ENABLE_STATIC_CACHE` | false | Cache static assets |
-| `DEBUG` | false | Enable debug logging |
-
-### Notifications
-
-See [../../docs/notifications.md](../../docs/notifications.md)
-
-### Custom Detectors
-
-See [../../docs/detectors.md](../../docs/detectors.md)
-
----
-
-## 💰 Cost
-
-Same as core package: **$0-11/month**
-
-See main [README](../../README.md#cost-estimate)
-
----
-
-## 📚 Documentation
-
-- [Getting Started](../../docs/getting-started.md)
-- [Detector Guide](../../docs/detectors.md)
-- [Notifications Setup](../../docs/notifications.md)
-- [Architecture](../../docs/architecture.md)
-
----
-
-## 🤝 Contributing
-
-Issues & PRs welcome! See [CONTRIBUTING.md](../../CONTRIBUTING.md)
-
----
-
-**Protect your legacy sites with zero code changes!** 🛡️
+MIT

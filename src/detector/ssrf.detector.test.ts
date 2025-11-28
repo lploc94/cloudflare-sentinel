@@ -144,22 +144,24 @@ describe('SSRFDetector', () => {
   });
 
   describe('Exclusions', () => {
-    it('should allow localhost when configured', async () => {
-      const detector = new SSRFDetector({ allowLocalhost: true });
-      const request = new Request('https://example.com?url=http://localhost/api', { method: 'GET' });
+    it('should exclude specified fields', async () => {
+      const detector = new SSRFDetector({ excludeFields: ['webhook_url'] });
+      const request = new Request('https://example.com?webhook_url=http://localhost/api', { method: 'GET' });
       
       const result = await detector.detectRequest(request, {});
       
+      // Field excluded, no detection
       expect(result).toBeNull();
     });
 
-    it('should exclude specified paths', async () => {
-      const detector = new SSRFDetector({ excludePaths: ['/webhook/*'] });
-      const request = new Request('https://example.com/webhook/test?url=http://localhost', { method: 'GET' });
+    it('should not exclude similar field names (exact match)', async () => {
+      const detector = new SSRFDetector({ excludeFields: ['url'] });
+      const request = new Request('https://example.com?callback_url=http://localhost/api', { method: 'GET' });
       
       const result = await detector.detectRequest(request, {});
       
-      expect(result).toBeNull();
+      // callback_url != url (exact match), still detected
+      expect(result).not.toBeNull();
     });
   });
 

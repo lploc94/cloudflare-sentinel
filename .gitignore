@@ -9,3 +9,6 @@ coverage/
 .wrangler/
 .dev.vars
 *.tsbuildinfo
+scripts/training/venv/
+scripts/training/data/PayloadsAllTheThings/
+scripts/training/data/SecLists/

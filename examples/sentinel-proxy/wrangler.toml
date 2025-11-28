@@ -7,47 +7,57 @@ compatibility_date = "2024-01-01"
 #   { pattern = "example.com/*", zone_name = "example.com" }
 # ]
 
-# Cron trigger cho cleanup tự động (weekly on Sunday 3 AM UTC)
-[triggers]
-crons = ["0 3 * * 0"]
+# ══════════════════════════════════════════════════════════════════════════════
+# KV NAMESPACES (required)
+# Run: wrangler kv:namespace create <NAME>
+# ══════════════════════════════════════════════════════════════════════════════
 
-# Rate Limiter binding
-[limits]
-cpu_ms = 50000
-
-# D1 Database
-[[d1_databases]]
-binding = "DB"
-database_name = "sentinel"
-database_id = "your-d1-database-id"  # wrangler d1 create sentinel
-
-# KV Namespace for behavior tracking (REQUIRED for behavior tracking)
+# Blocklist storage
 [[kv_namespaces]]
-binding = "BEHAVIOR_KV"
-id = "your-kv-namespace-id"  # wrangler kv:namespace create BEHAVIOR_KV
+binding = "BLOCKLIST_KV"
+id = "your-blocklist-kv-id"  # wrangler kv:namespace create BLOCKLIST_KV
 
-# Analytics Engine
-[[analytics_engine_datasets]]
-binding = "ANALYTICS"
+# Rate limit counters
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "your-ratelimit-kv-id"  # wrangler kv:namespace create RATE_LIMIT_KV
 
-# Rate Limiter
-[[unsafe.bindings]]
-name = "RATE_LIMITER"
-type = "ratelimit"
+# Reputation tracking
+[[kv_namespaces]]
+binding = "REPUTATION_KV"
+id = "your-reputation-kv-id"  # wrangler kv:namespace create REPUTATION_KV
 
-# R2 Bucket (optional - for archiving before cleanup)
-[[r2_buckets]]
-binding = "ARCHIVE_BUCKET"
-bucket_name = "sentinel-archives"
+# Escalation tracking (repeat offenders)
+[[kv_namespaces]]
+binding = "ESCALATION_KV"
+id = "your-escalation-kv-id"  # wrangler kv:namespace create ESCALATION_KV
 
-# Environment variables
+# ══════════════════════════════════════════════════════════════════════════════
+# OPTIONAL BINDINGS
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Analytics Engine (optional)
+# [[analytics_engine_datasets]]
+# binding = "ANALYTICS"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ENVIRONMENT VARIABLES
+# ══════════════════════════════════════════════════════════════════════════════
 [vars]
-ORIGIN_URL = "https://your-origin-website.com"  # Website that need to protect
-DEBUG = "false"
-CLEANUP_MODE = "BALANCED"  # MINIMAL, BALANCED, or CONSERVATIVE
-ENABLE_ARCHIVE = "true"    # Backup to R2 before cleanup
+# Origin website URL (REQUIRED)
+ORIGIN_URL = "https://your-backend.com"
 
-# Performance & Reliability
-ORIGIN_TIMEOUT = "30"      # Origin fetch timeout in seconds
-MAX_REQUEST_SIZE = "10485760"  # Max request size in bytes (10MB)
-ENABLE_STATIC_CACHE = "true"   # Cache static assets (images, CSS, JS)
+# Debug mode
+DEBUG = "false"
+
+# Origin timeout in seconds
+ORIGIN_TIMEOUT = "30"
+
+# Enable response detection (checks for data leaks)
+ENABLE_RESPONSE_DETECTION = "false"
+
+# Enable async pipeline (reputation tracking, blocklist updates)
+ENABLE_ASYNC_PIPELINE = "false"
+
+# Slack webhook for notifications (optional)
+# SLACK_WEBHOOK = "https://hooks.slack.com/services/xxx"

@@ -1,37 +1,66 @@
 # Detector System
 
-Internal guide for contributors working on detectors.
+Guide for contributors working on detectors.
 
 ## Architecture
 
 ```
 BaseDetector (abstract)
     ↓
-Built-in Detectors
-    ├─ SQLInjectionRequestDetector
-    ├─ XSSRequestDetector
-    ├─ PathTraversalRequestDetector
-    └─ BruteForceDetector
+Built-in Detectors (22 detectors)
+    ├─ Access Control: BlocklistDetector, RateLimitDetector, ReputationDetector
+    ├─ Injection: SQLInjection, XSS, NoSQL, CommandInjection, SSTI
+    ├─ Protocol: CSRF, XXE, HTTPSmuggling, JWT
+    ├─ Redirect: OpenRedirect, SSRF
+    ├─ Path: PathTraversal
+    ├─ Response: SQLInjection, XSS, PathTraversal (leak detection)
+    ├─ Behavior: BruteForce, FailureThreshold, Entropy
+    └─ ML: MLDetector (lightweight classifier)
 ```
 
 ## File Structure
 
 ```
 detector/
-├── base.ts                      # Base classes & interfaces
-├── sql-injection/
-│   ├── request-detector.ts      # Request detection
-│   ├── response-detector.ts     # Response detection  
-│   └── patterns.ts              # SQL patterns
-├── xss/
-│   ├── request-detector.ts
-│   ├── response-detector.ts
-│   └── patterns.ts
-├── path-traversal/
-│   └── ...
-├── brute-force/
-│   └── detector.ts
-└── index.ts                     # Exports
+├── base.ts                           # Base class & interfaces
+├── index.ts                          # Exports
+│
+│ # Access Control
+├── blocklist.detector.ts             # IP/key blocklist (KV-based)
+├── rate-limit.detector.ts            # Rate limiting (CF API or KV)
+│
+│ # Injection Attacks
+├── sql-injection.request.detector.ts # SQL injection (request)
+├── sql-injection.response.detector.ts# SQL injection (response leak)
+├── xss.request.detector.ts           # XSS (request)
+├── xss.response.detector.ts          # XSS (response)
+├── nosql-injection.detector.ts       # NoSQL injection (MongoDB, etc.)
+├── command-injection.detector.ts     # OS command injection
+├── ssti.detector.ts                  # Server-Side Template Injection (RCE)
+│
+│ # Protocol Attacks
+├── csrf.detector.ts                  # Cross-Site Request Forgery
+├── xxe.detector.ts                   # XML External Entity
+├── http-smuggling.detector.ts        # HTTP Request Smuggling
+├── jwt.detector.ts                   # JWT attacks (alg=none, kid injection)
+│
+│ # Redirect Attacks
+├── open-redirect.detector.ts         # Open redirect vulnerabilities
+├── ssrf.detector.ts                  # Server-Side Request Forgery
+│
+│ # Path Attacks
+├── path-traversal.request.detector.ts
+├── path-traversal.response.detector.ts
+│
+│ # Behavior Analysis
+├── brute-force.detector.ts           # Auth brute force (extends FailureThreshold)
+├── failure-threshold.detector.ts     # Generic failure counting
+├── entropy.detector.ts               # High entropy detection (encoded payloads)
+│
+│ # ML-based
+├── ml.detector.ts                    # Lightweight ML classifier
+│
+└── _examples.ts                      # Example custom detectors
 ```
 
 ## Adding New Detector
@@ -39,9 +68,9 @@ detector/
 ### 1. Create Detector Class
 
 ```typescript
-// src/detector/my-attack/detector.ts
-import { BaseDetector } from '../base';
-import type { DetectorResult } from '../base';
+// src/detector/my-attack.detector.ts
+import { BaseDetector, type DetectorResult } from './base';
+import { AttackType, SecuritySeverity } from '../types';
 
 export class MyAttackDetector extends BaseDetector {
   name = 'my_attack';
@@ -52,15 +81,12 @@ export class MyAttackDetector extends BaseDetector {
     const suspicious = await this.checkRequest(request);
     
     if (suspicious) {
-      return this.createResult({
-        attackType: 'my_attack',
-        severity: 'high',
-        confidence: 0.9,
-        evidence: {
-          field: 'query',
-          value: 'suspicious value',
-        },
-      });
+      return this.createResult(
+        AttackType.SUSPICIOUS_PATTERN,
+        SecuritySeverity.HIGH,
+        0.9,
+        { field: 'query', value: 'suspicious value' }
+      );
     }
     
     return null; // No attack detected
@@ -73,28 +99,18 @@ export class MyAttackDetector extends BaseDetector {
 }
 ```
 
-### 2. Add Patterns (if pattern-based)
-
-```typescript
-// src/detector/my-attack/patterns.ts
-export const MY_ATTACK_PATTERNS = [
-  /pattern1/i,
-  /pattern2/i,
-];
-```
-
-### 3. Export Detector
+### 2. Export Detector
 
 ```typescript
 // src/detector/index.ts
-export { MyAttackDetector } from './my-attack/detector';
+export { MyAttackDetector } from './my-attack.detector';
 ```
 
-### 4. Add Tests
+### 3. Add Tests
 
 ```typescript
-// src/detector/my-attack/__tests__/detector.test.ts
-import { MyAttackDetector } from '../detector';
+// src/detector/my-attack.detector.test.ts
+import { MyAttackDetector } from './my-attack.detector';
 
 describe('MyAttackDetector', () => {
   it('detects my attack', async () => {
@@ -202,9 +218,24 @@ Execution order: Priority DESC (100 → 0)
 ## Examples
 
 See existing detectors:
-- `sql-injection/` - Pattern-based detection
-- `xss/` - Regex + context analysis
-- `brute-force/` - Rate-based detection
+
+**Injection Detection:**
+- `sql-injection.request.detector.ts` - Pattern-based SQL injection
+- `xss.request.detector.ts` - XSS with HTML entity decoding
+- `ssti.detector.ts` - Template injection (Jinja2, Twig, ERB, etc.)
+- `command-injection.detector.ts` - Shell metacharacter detection
+
+**Protocol Detection:**
+- `csrf.detector.ts` - Origin/Referer validation
+- `jwt.detector.ts` - alg=none, kid injection, jku SSRF
+- `http-smuggling.detector.ts` - CL.TE, header injection
+
+**Behavior Detection:**
+- `brute-force.detector.ts` - KV-based failure counting
+- `rate-limit.detector.ts` - CF API or KV rate limiting
+
+**Custom Examples:**
+- `_examples.ts` - Custom detector examples
 
 ---
 

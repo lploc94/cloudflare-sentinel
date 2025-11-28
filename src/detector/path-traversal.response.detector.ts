@@ -3,13 +3,139 @@
  * Detects directory listing and file content leaks in responses
  */
 
-import { BaseDetector } from './base';
+import { BaseDetector, type BaseDetectorOptions } from './base';
 import { AttackType, SecuritySeverity } from '../types';
 import type { DetectorResult } from './base';
 
+/** Pattern for detecting leaks in response */
+export interface ResponseLeakPattern {
+  regex: RegExp;
+  description: string;
+  confidence: number;
+  severity: SecuritySeverity;
+}
+
+export interface PathTraversalResponseDetectorConfig extends BaseDetectorOptions {
+  /** Custom directory listing patterns - if provided, OVERRIDES built-in */
+  directoryPatterns?: ResponseLeakPattern[];
+  /** Custom file leak patterns - if provided, OVERRIDES built-in */
+  fileLeakPatterns?: ResponseLeakPattern[];
+}
+
+// === DIRECTORY LISTING PATTERNS ===
+const DIRECTORY_LISTING_PATTERNS: ResponseLeakPattern[] = [
+  // Apache
+  { regex: /<title>Index of \//i, description: 'Apache directory listing', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { regex: /\[To Parent Directory\]/i, description: 'IIS directory listing', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  
+  // Nginx
+  { regex: /<h1>Index of/i, description: 'Nginx directory listing', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  
+  // Generic
+  { regex: /Parent Directory.*Size.*Modified/is, description: 'Generic directory listing', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /<pre>.*?drwx.*?<\/pre>/is, description: 'Unix directory listing', confidence: 0.92, severity: SecuritySeverity.HIGH },
+];
+
+// === FILE CONTENT LEAK PATTERNS ===
+const FILE_LEAK_PATTERNS: ResponseLeakPattern[] = [
+  // === CRITICAL - Private keys & secrets ===
+  { regex: /-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----/, description: 'Private key exposed', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  { regex: /-----BEGIN OPENSSH PRIVATE KEY-----/, description: 'SSH private key', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  { regex: /-----BEGIN PGP PRIVATE KEY-----/, description: 'PGP private key', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  
+  // Linux shadow file
+  { regex: /root:\$[156y]\$[^\s:]+:[0-9]+:/, description: 'Shadow file hash', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  
+  // === HIGH - System files ===
+  // Linux passwd
+  { regex: /root:x:\d+:\d+:root:\/root:/, description: 'Linux passwd file', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { regex: /nobody:x:\d+:\d+:/, description: 'Linux passwd file', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  
+  // === HIGH - Cloud credentials ===
+  { regex: /AKIA[0-9A-Z]{16}/, description: 'AWS Access Key', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  { regex: /aws_secret_access_key\s*[=:]\s*[A-Za-z0-9\/+=]{40}/i, description: 'AWS Secret Key', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  { regex: /AZURE_[A-Z_]+\s*[=:]\s*["']?[A-Za-z0-9+\/=]{20,}/i, description: 'Azure credential', confidence: 0.9, severity: SecuritySeverity.CRITICAL },
+  { regex: /service_account.*private_key.*-----BEGIN/is, description: 'GCP service account', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  
+  // === HIGH - Database credentials ===
+  { regex: /mongodb(\+srv)?:\/\/[^:]+:[^@]+@/i, description: 'MongoDB connection string', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /postgres:\/\/[^:]+:[^@]+@/i, description: 'PostgreSQL connection string', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /mysql:\/\/[^:]+:[^@]+@/i, description: 'MySQL connection string', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /redis:\/\/:[^@]+@/i, description: 'Redis connection string', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  
+  // === HIGH - Environment & config files ===
+  { regex: /DB_PASSWORD\s*[=:]\s*["']?[^\s"']+/i, description: 'Database password in env', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /JWT_SECRET\s*[=:]\s*["']?[^\s"']+/i, description: 'JWT secret exposed', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /API_KEY\s*[=:]\s*["']?[A-Za-z0-9_-]{20,}/i, description: 'API key exposed', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /SECRET_KEY\s*[=:]\s*["']?[^\s"']+/i, description: 'Secret key exposed', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  
+  // === MEDIUM - Config files ===
+  { regex: /\[mysqld\][\s\S]*?datadir\s*=/i, description: 'MySQL config file', confidence: 0.9, severity: SecuritySeverity.MEDIUM },
+  { regex: /ServerRoot[\s\S]*?DocumentRoot/i, description: 'Apache config', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { regex: /server\s*\{[\s\S]*?root\s+[^;]+;/i, description: 'Nginx config', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { regex: /<VirtualHost[\s\S]*?<\/VirtualHost>/i, description: 'Apache VirtualHost', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  
+  // htaccess
+  { regex: /RewriteEngine\s+On[\s\S]*?RewriteRule/i, description: '.htaccess file', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { regex: /AuthType\s+Basic[\s\S]*?AuthUserFile/i, description: '.htaccess auth config', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  
+  // PHP/WordPress
+  { regex: /\$_SERVER\[['"]DOCUMENT_ROOT['"]\]/i, description: 'PHP source code', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { regex: /define\s*\(\s*['"]DB_PASSWORD['"]/i, description: 'wp-config.php', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  
+  // Windows
+  { regex: /\[boot loader\][\s\S]*?timeout\s*=/i, description: 'Windows boot.ini', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /<connectionStrings>[\s\S]*?<\/connectionStrings>/i, description: 'ASP.NET connection strings', confidence: 0.9, severity: SecuritySeverity.HIGH },
+];
+
+/**
+ * PathTraversalResponseDetector - Detect sensitive data leaks in responses
+ * 
+ * Detects directory listings and file content exposure that may indicate
+ * successful path traversal attacks.
+ * 
+ * @example
+ * ```typescript
+ * // Basic usage
+ * new PathTraversalResponseDetector({})
+ * 
+ * // Custom confidence threshold
+ * new PathTraversalResponseDetector({
+ *   baseConfidence: 0.9,
+ * })
+ * 
+ * // Override file leak patterns
+ * new PathTraversalResponseDetector({
+ *   fileLeakPatterns: [
+ *     { regex: /MY_SECRET_KEY/, description: 'Custom secret', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+ *   ],
+ * })
+ * 
+ * // Access built-in patterns
+ * PathTraversalResponseDetector.DIRECTORY_PATTERNS
+ * PathTraversalResponseDetector.FILE_LEAK_PATTERNS
+ * ```
+ */
 export class PathTraversalResponseDetector extends BaseDetector {
   name = 'path-traversal-response';
+  phase = 'response' as const;
   priority = 90;
+
+  private config: PathTraversalResponseDetectorConfig;
+  private directoryPatterns: ResponseLeakPattern[];
+  private fileLeakPatterns: ResponseLeakPattern[];
+
+  /** Built-in directory listing patterns */
+  static readonly DIRECTORY_PATTERNS = DIRECTORY_LISTING_PATTERNS;
+  /** Built-in file leak patterns */
+  static readonly FILE_LEAK_PATTERNS = FILE_LEAK_PATTERNS;
+
+  constructor(config: PathTraversalResponseDetectorConfig = {}) {
+    super();
+    this.config = config;
+    this.directoryPatterns = config.directoryPatterns ?? DIRECTORY_LISTING_PATTERNS;
+    this.fileLeakPatterns = config.fileLeakPatterns ?? FILE_LEAK_PATTERNS;
+  }
 
   async detectResponse(request: Request, response: Response, context: any): Promise<DetectorResult | null> {
     const contentType = response.headers.get('content-type') || '';
@@ -38,90 +164,45 @@ export class PathTraversalResponseDetector extends BaseDetector {
   }
 
   private checkForDirectoryListing(body: string): DetectorResult | null {
-    const listingPatterns = [
-      // Apache-style directory listing
-      { regex: /<title>Index of \//i, confidence: 0.98, type: 'apache_dir_listing' },
-      { regex: /\[To Parent Directory\]/i, confidence: 0.95, type: 'dir_listing' },
-      
-      // Nginx-style directory listing
-      { regex: /<h1>Index of/i, confidence: 0.98, type: 'nginx_dir_listing' },
-      
-      // Generic directory listing indicators
-      { regex: /Parent Directory.*Size.*Modified/i, confidence: 0.9, type: 'generic_dir_listing' },
-      { regex: /<table>.*?<tr>.*?Name.*?Size.*?Date/i, confidence: 0.85, type: 'table_dir_listing' },
-    ];
-    
-    for (const { regex, confidence, type } of listingPatterns) {
+    for (const { regex, description, confidence, severity } of this.directoryPatterns) {
       if (regex.test(body)) {
-        return {
-          detected: true,
-          attackType: AttackType.PATH_TRAVERSAL,
-          severity: SecuritySeverity.HIGH,
-          confidence,
-          evidence: {
+        const finalConfidence = this.config.baseConfidence ?? confidence;
+        return this.createResult(
+          AttackType.PATH_TRAVERSAL,
+          severity,
+          finalConfidence,
+          {
             field: 'response_body',
             value: 'Directory listing detected',
-            rawContent: body.substring(0, 200),
+            pattern: regex.source,
+            rawContent: `Matched: ${description}`,
           },
-          metadata: {
-            detectionType: 'directory_listing_leak',
-            listingType: type,
-          },
-        };
+          { detectionType: 'directory_listing', matchedPattern: description }
+        );
       }
     }
-    
     return null;
   }
 
   private checkForFileContentLeaks(body: string): DetectorResult | null {
-    const fileLeakPatterns = [
-      // Linux system files
-      { regex: /root:x:\d+:\d+:root:\/root:/i, confidence: 0.98, type: 'passwd_file' },
-      { regex: /root:\$\w+\$/i, confidence: 0.99, type: 'shadow_file' },
-      
-      // Config files
-      { regex: /\[mysqld\].*?datadir/i, confidence: 0.9, type: 'mysql_config' },
-      { regex: /ServerRoot.*?DocumentRoot/i, confidence: 0.9, type: 'apache_config' },
-      { regex: /DB_PASSWORD.*?DB_HOST/i, confidence: 0.95, type: 'env_config' },
-      
-      // Application files
-      { regex: /<\?php.*?require.*?include/i, confidence: 0.85, type: 'php_source' },
-      { regex: /package\.json.*?"scripts"/i, confidence: 0.8, type: 'package_json' },
-      
-      // Private keys
-      { regex: /-----BEGIN (RSA |EC )?PRIVATE KEY-----/i, confidence: 0.99, type: 'private_key' },
-      { regex: /-----BEGIN OPENSSH PRIVATE KEY-----/i, confidence: 0.99, type: 'ssh_key' },
-      
-      // Windows system files
-      { regex: /\[boot loader\].*?timeout/i, confidence: 0.95, type: 'boot_ini' },
-      { regex: /\[System\.ServiceModel\]/i, confidence: 0.9, type: 'web_config' },
-    ];
-    
-    for (const { regex, confidence, type } of fileLeakPatterns) {
+    for (const { regex, description, confidence, severity } of this.fileLeakPatterns) {
       const match = body.match(regex);
       if (match) {
-        return {
-          detected: true,
-          attackType: AttackType.PATH_TRAVERSAL,
-          severity: type.includes('key') || type.includes('shadow') || type.includes('password') 
-            ? SecuritySeverity.CRITICAL 
-            : SecuritySeverity.HIGH,
-          confidence,
-          evidence: {
+        const finalConfidence = this.config.baseConfidence ?? confidence;
+        return this.createResult(
+          AttackType.PATH_TRAVERSAL,
+          severity,
+          finalConfidence,
+          {
             field: 'response_body',
             value: this.sanitizeValue(match[0]),
-            rawContent: `Sensitive file content leaked: ${type}`,
+            pattern: regex.source,
+            rawContent: `Matched: ${description}`,
           },
-          metadata: {
-            detectionType: 'file_content_leak',
-            fileType: type,
-            severity: 'sensitive_data_exposure',
-          },
-        };
+          { detectionType: 'file_content_leak', matchedPattern: description }
+        );
       }
     }
-    
     return null;
   }
 

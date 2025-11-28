@@ -116,19 +116,17 @@ describe('BaseDetector', () => {
         { dbType: 'postgres' }
       );
 
-      expect(result).toEqual({
-        detected: true,
-        attackType: AttackType.SQL_INJECTION,
-        severity: SecuritySeverity.CRITICAL,
-        confidence: 1.0,
-        evidence: {
-          field: 'query',
-          value: "'; DROP TABLE users--",
-        },
-        metadata: {
-          dbType: 'postgres',
-        },
+      expect(result.detected).toBe(true);
+      expect(result.detectorName).toBe('test-detector');
+      expect(result.attackType).toBe(AttackType.SQL_INJECTION);
+      expect(result.severity).toBe(SecuritySeverity.CRITICAL);
+      expect(result.confidence).toBe(1.0);
+      expect(result.evidence).toEqual({
+        field: 'query',
+        value: "'; DROP TABLE users--",
       });
+      expect(result.metadata?.dbType).toBe('postgres');
+      expect(result.metadata?.timestamp).toBeTypeOf('number');
     });
 
     it('should create result without optional fields', () => {
@@ -140,12 +138,12 @@ describe('BaseDetector', () => {
         0.85
       );
 
-      expect(result).toEqual({
-        detected: true,
-        attackType: AttackType.XSS,
-        severity: SecuritySeverity.HIGH,
-        confidence: 0.85,
-      });
+      expect(result.detected).toBe(true);
+      expect(result.detectorName).toBe('test-detector');
+      expect(result.attackType).toBe(AttackType.XSS);
+      expect(result.severity).toBe(SecuritySeverity.HIGH);
+      expect(result.confidence).toBe(0.85);
+      expect(result.metadata?.timestamp).toBeTypeOf('number');
     });
   });
 

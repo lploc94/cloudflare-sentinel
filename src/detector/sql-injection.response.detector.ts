@@ -3,17 +3,174 @@
  * Detects SQL error leaks and query structures in responses
  */
 
-import { BaseDetector } from './base';
+import { BaseDetector, type BaseDetectorOptions } from './base';
 import { AttackType, SecuritySeverity } from '../types';
 import type { DetectorResult } from './base';
 
+/** Pattern for detecting SQL leaks in response */
+export interface SQLLeakPattern {
+  regex: RegExp;
+  description: string;
+  confidence: number;
+  severity: SecuritySeverity;
+}
+
+/**
+ * Sanitizer function for masking sensitive data in evidence/logs
+ * @param value - The matched value to sanitize
+ * @returns Sanitized value safe for logging
+ */
+export type EvidenceSanitizer = (value: string) => string;
+
+export interface SQLInjectionResponseDetectorConfig extends BaseDetectorOptions {
+  /** Custom patterns - if provided, OVERRIDES built-in patterns */
+  patterns?: SQLLeakPattern[];
+  /** Only scan error responses (default: true) */
+  errorResponsesOnly?: boolean;
+  /**
+   * Custom sanitizer for evidence values (masks sensitive data in logs/reports)
+   * 
+   * NOTE: This is for masking sensitive data in LOGS/EVIDENCE, NOT for
+   * sanitizing input to prevent attacks. Attack prevention is handled by executors.
+   * 
+   * Default: masks passwords, tokens, and User IDs
+   * 
+   * @example
+   * ```typescript
+   * sanitizer: (value) => {
+   *   // Mask your service-specific secrets
+   *   return value
+   *     .replace(/API_KEY=\S+/gi, 'API_KEY=***')
+   *     .replace(/my_secret_field=\S+/gi, 'my_secret_field=***');
+   * }
+   * ```
+   */
+  sanitizer?: EvidenceSanitizer;
+  /** Max length for evidence value (default: 100) */
+  maxEvidenceLength?: number;
+}
+
+// === SQL ERROR LEAK PATTERNS ===
+const SQL_LEAK_PATTERNS: SQLLeakPattern[] = [
+  // === CRITICAL - Database error messages (very specific) ===
+  
+  // MySQL
+  { regex: /You have an error in your SQL syntax/i, description: 'MySQL syntax error', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  { regex: /mysql_fetch_/i, description: 'MySQL function leak', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  { regex: /mysqli?::/i, description: 'MySQLi leak', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /MySQL server version for the right syntax/i, description: 'MySQL version leak', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  
+  // PostgreSQL
+  { regex: /PostgreSQL.*?ERROR/i, description: 'PostgreSQL error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /pg_query\(\)/i, description: 'pg_query leak', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /psycopg2\.(DatabaseError|OperationalError)/i, description: 'Python psycopg2 error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  
+  // Oracle
+  { regex: /ORA-\d{5}/i, description: 'Oracle error code', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  { regex: /Oracle.*?Driver/i, description: 'Oracle driver leak', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  
+  // SQL Server
+  { regex: /Microsoft SQL Server.*?error/i, description: 'MSSQL error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /\[Microsoft\]\[ODBC SQL Server Driver\]/i, description: 'MSSQL ODBC error', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  { regex: /System\.Data\.SqlClient/i, description: '.NET SqlClient error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  
+  // SQLite
+  { regex: /SQLite.*?error/i, description: 'SQLite error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /sqlite3\.(DatabaseError|OperationalError)/i, description: 'Python sqlite3 error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  
+  // Generic SQL
+  { regex: /SQLSTATE\[\w+\]/i, description: 'SQLSTATE error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /SQL\s+syntax.*?error/i, description: 'SQL syntax error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  
+  // === HIGH - ORM/Framework errors ===
+  
+  // PHP PDO
+  { regex: /PDOException/i, description: 'PHP PDO exception', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /SQLSTATE\[HY\d+\]/i, description: 'PDO SQLSTATE', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  
+  // Java JDBC
+  { regex: /java\.sql\.SQLException/i, description: 'Java SQLException', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /JDBCException/i, description: 'JDBC exception', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /org\.hibernate\.exception/i, description: 'Hibernate exception', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  
+  // Node.js ORMs
+  { regex: /PrismaClientKnownRequestError/i, description: 'Prisma error', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /SequelizeDatabaseError/i, description: 'Sequelize error', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /TypeORMError/i, description: 'TypeORM error', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /QueryFailedError/i, description: 'TypeORM query failed', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  
+  // Python ORMs
+  { regex: /sqlalchemy\.exc\./i, description: 'SQLAlchemy error', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /django\.db\.utils/i, description: 'Django DB error', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  
+  // === MEDIUM - Query structure leaks ===
+  { regex: /SELECT\s+.*?\s+FROM\s+\w+/i, description: 'SELECT query leak', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { regex: /UPDATE\s+\w+\s+SET/i, description: 'UPDATE query leak', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { regex: /INSERT\s+INTO\s+\w+/i, description: 'INSERT query leak', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { regex: /DELETE\s+FROM\s+\w+/i, description: 'DELETE query leak', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  
+  // === MEDIUM - Schema leaks ===
+  { regex: /table\s+['"]\w+['"].*?doesn't exist/i, description: 'Table name leak', confidence: 0.9, severity: SecuritySeverity.MEDIUM },
+  { regex: /unknown\s+column\s+['"]\w+['"]/i, description: 'Column name leak', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { regex: /column\s+['"]\w+['"].*?not found/i, description: 'Column not found', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  
+  // === HIGH - Connection string leaks ===
+  { regex: /(Server|Database|User\s*ID|Password)\s*=\s*[^;\s]+/i, description: 'Connection string leak', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  { regex: /Data Source\s*=\s*[^;\s]+/i, description: 'Data source leak', confidence: 0.95, severity: SecuritySeverity.HIGH },
+];
+
+/**
+ * SQLInjectionResponseDetector - Detect SQL error leaks in responses
+ * 
+ * Detects database error messages and query structures that may indicate
+ * SQL injection vulnerabilities or information disclosure.
+ * 
+ * @example
+ * ```typescript
+ * // Basic usage
+ * new SQLInjectionResponseDetector({})
+ * 
+ * // Scan all responses (not just errors)
+ * new SQLInjectionResponseDetector({
+ *   errorResponsesOnly: false,
+ * })
+ * 
+ * // Override patterns
+ * new SQLInjectionResponseDetector({
+ *   patterns: [
+ *     { regex: /CustomDBError/, description: 'Custom DB', confidence: 0.9, severity: SecuritySeverity.HIGH },
+ *   ],
+ * })
+ * 
+ * // Access built-in patterns
+ * SQLInjectionResponseDetector.PATTERNS
+ * ```
+ */
 export class SQLInjectionResponseDetector extends BaseDetector {
   name = 'sql-injection-response';
+  phase = 'response' as const;
   priority = 100;
 
+  private config: SQLInjectionResponseDetectorConfig;
+  private activePatterns: SQLLeakPattern[];
+
+  /** Built-in patterns */
+  static readonly PATTERNS = SQL_LEAK_PATTERNS;
+
+  constructor(config: SQLInjectionResponseDetectorConfig = {}) {
+    super();
+    this.config = {
+      errorResponsesOnly: true,
+      ...config,
+    };
+    this.activePatterns = config.patterns ?? SQL_LEAK_PATTERNS;
+  }
+
   async detectResponse(request: Request, response: Response, context: any): Promise<DetectorResult | null> {
-    // Only scan error responses (4xx, 5xx)
-    if (response.status < 400) return null;
+    // Check if we should only scan error responses
+    if (this.config.errorResponsesOnly && response.status < 400) {
+      return null;
+    }
     
     try {
       const contentType = response.headers.get('content-type') || '';
@@ -26,99 +183,54 @@ export class SQLInjectionResponseDetector extends BaseDetector {
       }
       
       const body = await response.clone().text();
-      
-      // Detect SQL error messages and query leaks
-      const detection = this.checkForSQLLeaks(body);
-      if (detection) return detection;
+      return this.checkForSQLLeaks(body);
       
     } catch (error) {
       // Cannot read response body
+      return null;
     }
-    
-    return null;
   }
 
   private checkForSQLLeaks(body: string): DetectorResult | null {
-    const leakPatterns = [
-      // Database error messages
-      { regex: /SQL\s+syntax.*?error/i, confidence: 0.95, type: 'sql_syntax_error' },
-      { regex: /mysql_fetch_/i, confidence: 0.98, type: 'mysql_function_leak' },
-      { regex: /mysqli?::/i, confidence: 0.95, type: 'mysqli_leak' },
-      { regex: /PostgreSQL.*?ERROR/i, confidence: 0.95, type: 'postgresql_error' },
-      { regex: /ORA-\d{5}/i, confidence: 0.98, type: 'oracle_error' },
-      { regex: /SQLSTATE\[\w+\]/i, confidence: 0.95, type: 'sqlstate_error' },
-      { regex: /SQLite.*?error/i, confidence: 0.95, type: 'sqlite_error' },
-      { regex: /Microsoft SQL Server.*?error/i, confidence: 0.95, type: 'mssql_error' },
-      
-      // Query structure leaks
-      { regex: /SELECT\s+.*?\s+FROM\s+\w+/i, confidence: 0.9, type: 'query_structure_leak' },
-      { regex: /UPDATE\s+\w+\s+SET/i, confidence: 0.9, type: 'update_query_leak' },
-      { regex: /INSERT\s+INTO\s+\w+/i, confidence: 0.9, type: 'insert_query_leak' },
-      { regex: /DELETE\s+FROM\s+\w+/i, confidence: 0.9, type: 'delete_query_leak' },
-      
-      // Table/column name leaks
-      { regex: /table\s+['"]\w+['"].*?doesn't exist/i, confidence: 0.9, type: 'table_name_leak' },
-      { regex: /column\s+['"]\w+['"].*?not found/i, confidence: 0.85, type: 'column_name_leak' },
-      { regex: /unknown\s+column\s+['"]\w+['"]/i, confidence: 0.85, type: 'column_leak' },
-      
-      // Connection string leaks
-      { regex: /(Server|Database|User\s*ID|Password)\s*=\s*\S+/i, confidence: 0.98, type: 'connection_string_leak' },
-      
-      // Stack traces with SQL
-      { regex: /at\s+.*?(query|execute|prepare).*?\.php:\d+/i, confidence: 0.8, type: 'sql_stack_trace' },
-    ];
-    
-    for (const { regex, confidence, type } of leakPatterns) {
+    for (const { regex, description, confidence, severity } of this.activePatterns) {
       const match = body.match(regex);
       if (match) {
-        return {
-          detected: true,
-          attackType: AttackType.SQL_INJECTION,
-          severity: this.getSeverity(confidence),
-          confidence,
-          evidence: {
+        const finalConfidence = this.config.baseConfidence ?? confidence;
+        return this.createResult(
+          AttackType.SQL_INJECTION,
+          severity,
+          finalConfidence,
+          {
             field: 'response_body',
             value: this.sanitizeValue(match[0]),
-            rawContent: this.getContext(body, match.index || 0),
+            pattern: regex.source,
+            rawContent: `Matched: ${description}`,
           },
-          metadata: {
-            detectionType: 'response_leak',
-            leakType: type,
-            statusCode: 'error',
-          },
-        };
+          { detectionType: 'sql_leak', matchedPattern: description }
+        );
       }
     }
-    
     return null;
   }
 
-  private getContext(text: string, position: number, contextSize: number = 100): string {
-    const start = Math.max(0, position - contextSize);
-    const end = Math.min(text.length, position + contextSize);
-    let context = text.substring(start, end);
-    
-    // Sanitize sensitive data in context
-    context = context.replace(/password[=:]\s*\S+/gi, 'password=***');
-    context = context.replace(/token[=:]\s*\S+/gi, 'token=***');
-    
-    return '...' + context + '...';
-  }
-
-  private getSeverity(confidence: number): SecuritySeverity {
-    if (confidence >= 0.95) return SecuritySeverity.CRITICAL;
-    if (confidence >= 0.85) return SecuritySeverity.HIGH;
-    if (confidence >= 0.7) return SecuritySeverity.MEDIUM;
-    return SecuritySeverity.LOW;
-  }
-
+  /**
+   * Sanitize value for safe logging/evidence
+   * Uses custom sanitizer if provided, otherwise applies default masking
+   */
   private sanitizeValue(value: string): string {
-    const maxLength = 100;
+    const maxLength = this.config.maxEvidenceLength ?? 100;
     let sanitized = value.substring(0, maxLength);
     
-    // Mask potential passwords or tokens
-    sanitized = sanitized.replace(/password[=:]\s*\S+/gi, 'password=***');
-    sanitized = sanitized.replace(/token[=:]\s*\S+/gi, 'token=***');
+    if (this.config.sanitizer) {
+      // Use custom sanitizer
+      sanitized = this.config.sanitizer(sanitized);
+    } else {
+      // Default: mask common sensitive fields
+      sanitized = sanitized.replace(/password[=:]\s*\S+/gi, 'password=***');
+      sanitized = sanitized.replace(/token[=:]\s*\S+/gi, 'token=***');
+      sanitized = sanitized.replace(/User\s*ID\s*=\s*\S+/gi, 'User ID=***');
+      sanitized = sanitized.replace(/secret[=:]\s*\S+/gi, 'secret=***');
+    }
     
     return sanitized + (value.length > maxLength ? '...' : '');
   }

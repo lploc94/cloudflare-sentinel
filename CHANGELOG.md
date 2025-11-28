@@ -5,6 +5,49 @@ All notable changes to Cloudflare Sentinel will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Pipeline Architecture** - New `SentinelPipeline` class with composable stages
+  - `SentinelPipeline.sync()` - Returns Decision, user controls response
+  - `SentinelPipeline.async()` - Fire-and-forget background processing
+- **Multi-Level Resolver** - `MultiLevelResolver` with configurable thresholds and cascading actions
+- **MLDetector** - Lightweight ML classifier for suspicious request pre-filtering
+  - Binary classification: safe vs suspicious
+  - ~224KB bundled model trained on 133K samples
+  - Custom model support via options
+- **ML Training Scripts** (`scripts/training/`)
+  - `download_datasets.py` - Download PayloadsAllTheThings + SecLists
+  - `generate_safe_requests.py` - Generate synthetic safe requests
+  - `train_classifier.py` - Train scikit-learn classifier
+- **New Detectors**
+  - `BlocklistDetector` - IP blocklist (KV-based)
+  - `RateLimitDetector` - Rate limiting (KV-based)
+  - `ReputationDetector` - IP reputation scoring
+  - `XXEDetector` - XML External Entity injection
+  - `SSTIDetector` - Server-Side Template Injection
+  - `JWTDetector` - JWT attacks (alg=none, kid injection)
+  - `HTTPSmugglingDetector` - HTTP Request Smuggling
+  - `OpenRedirectDetector` - Open redirect vulnerabilities
+  - `CSRFDetector` - Cross-Site Request Forgery
+- **New Handlers**
+  - `BanHandler` - Automatically add IPs to blocklist
+  - `BlocklistHandler` - Add to KV blocklist
+  - `ReputationHandler` - Update IP reputation score
+- **ML Module** (`src/ml/`) - MurmurHash3, HashingVectorizer, LinearClassifier
+- **Response Detection** - Process responses for data leak detection
+- **Route-Based Config** - Different protection levels per endpoint
+
+### Changed
+- **Breaking**: Replaced `Sentinel` class with `SentinelPipeline`
+- **Breaking**: Replaced `attackLimits` with `MultiLevelResolver` thresholds
+- Flattened source structure - removed nested folders
+
+### Removed
+- Old `Sentinel` class and `protect()` method
+- `attackLimits` configuration
+- D1 database dependency (now optional)
+
 ## [1.0.4] - 2025-11-25
 
 ### Added

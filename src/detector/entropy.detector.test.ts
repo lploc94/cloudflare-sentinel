@@ -54,37 +54,21 @@ describe('EntropyDetector', () => {
       expect(result?.detected).toBe(true);
     });
 
-    it('should exclude paths in excludePaths', async () => {
-      const detector = new EntropyDetector({
-        excludePaths: ['/api/auth/*', '/oauth/*'],
-        entropyThreshold: 4.0,
-      });
-      
-      const encoded = 'U0VMRUNUICogRlJPTSB1c2VycyBXSEVSRSBpZCA9IDE=';
-      const request = new Request(`https://example.com/api/auth/token?payload=${encoded}`, {
-        method: 'GET',
-      });
-
-      const result = await detector.detectRequest(request, {});
-      
-      // Should not detect because path is excluded
-      expect(result).toBeNull();
-    });
-
-    it('should exclude fields in excludeFields', async () => {
+    it('should exclude fields in excludeFields (exact match)', async () => {
       const detector = new EntropyDetector({
         excludeFields: ['token', 'jwt'],
         entropyThreshold: 4.0,
       });
       
       const encoded = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
-      const request = new Request(`https://example.com?jwt_token=${encoded}`, {
+      // Use exact field name 'token' which matches excludeFields
+      const request = new Request(`https://example.com?token=${encoded}`, {
         method: 'GET',
       });
 
       const result = await detector.detectRequest(request, {});
       
-      // Should not detect because field contains 'token'
+      // Should not detect because field name 'token' is in excludeFields
       expect(result).toBeNull();
     });
 
@@ -153,14 +137,14 @@ describe('EntropyDetector', () => {
     });
   });
 
-  describe('requireAdditionalSignals', () => {
-    it('should only detect when additional signals present', async () => {
+  describe('signalPatterns', () => {
+    it('should only detect when signal pattern matches', async () => {
       const detector = new EntropyDetector({
         entropyThreshold: 4.0,
-        requireAdditionalSignals: true,
+        signalPatterns: EntropyDetector.SIGNAL_PATTERNS,
       });
       
-      // Pure base64 pattern - has additional signal
+      // Pure base64 pattern - matches signal pattern
       const base64 = 'U0VMRUNUICogRlJPTSB1c2VycyBXSEVSRSBpZCA9IDE=';
       const request = new Request(`https://example.com?payload=${base64}`, {
         method: 'GET',
@@ -168,7 +152,7 @@ describe('EntropyDetector', () => {
 
       const result = await detector.detectRequest(request, {});
       
-      // Should detect because base64 pattern is an additional signal
+      // Should detect because base64 pattern matches signal
       expect(result).not.toBeNull();
     });
   });

@@ -1,31 +1,50 @@
 /**
  * Detector exports
- * Base classes and interfaces for building custom detectors
  */
 
-// Export base detector interfaces and classes
-export { BaseDetector, type IDetector, type DetectorResult, type DetectionEvidence } from './base';
+// Base
+export { 
+  BaseDetector, 
+  type IDetector, 
+  type DetectorResult, 
+  type DetectionEvidence,
+  type DetectorPhase,
+  type BaseDetectorOptions,
+} from './base';
+
+// Security detectors
+export { BlocklistDetector, type BlocklistDetectorOptions } from './blocklist.detector';
+export { RateLimitDetector, type RateLimitDetectorConfig, type CloudflareRateLimitConfig, type KVRateLimitConfig, type RateLimiter } from './rate-limit.detector';
+export { ReputationDetector, type ReputationDetectorOptions } from './reputation.detector';
 
 // Request detectors
-export { SQLInjectionRequestDetector } from './sql-injection.request.detector';
-export { XSSRequestDetector } from './xss.request.detector';
-export { PathTraversalRequestDetector } from './path-traversal.request.detector';
+export { SQLInjectionRequestDetector, type SQLInjectionRequestDetectorConfig, type SQLInjectionPattern, type SQLInjectionSanitizer } from './sql-injection.request.detector';
+export { XSSRequestDetector, type XSSRequestDetectorConfig, type XSSPattern } from './xss.request.detector';
+export { PathTraversalRequestDetector, type PathTraversalRequestDetectorConfig, type PathTraversalPattern } from './path-traversal.request.detector';
 
 // Response detectors
-export { SQLInjectionResponseDetector } from './sql-injection.response.detector';
+export { SQLInjectionResponseDetector, type SQLInjectionResponseDetectorConfig, type SQLLeakPattern, type EvidenceSanitizer } from './sql-injection.response.detector';
 export { XSSResponseDetector } from './xss.response.detector';
-export { PathTraversalResponseDetector } from './path-traversal.response.detector';
+export { PathTraversalResponseDetector, type PathTraversalResponseDetectorConfig, type ResponseLeakPattern } from './path-traversal.response.detector';
 
-// Behavior detector (works on both request + response)
-export { BruteForceDetector } from './brute-force.detector';
-
-// Entropy-based detector
+// Behavior detectors
+export { FailureThresholdDetector, FailureStatusPresets, type FailureThresholdDetectorOptions } from './failure-threshold.detector';
+export { BruteForceDetector, type BruteForceDetectorOptions } from './brute-force.detector';
 export { EntropyDetector, type EntropyDetectorConfig } from './entropy.detector';
 
 // Injection detectors
-export { CommandInjectionDetector, type CommandInjectionDetectorConfig } from './command-injection.detector';
-export { SSRFDetector, type SSRFDetectorConfig } from './ssrf.detector';
-export { NoSQLInjectionDetector, type NoSQLInjectionDetectorConfig } from './nosql-injection.detector';
+export { CommandInjectionDetector, type CommandInjectionDetectorConfig, type CommandPattern } from './command-injection.detector';
+export { SSRFDetector, type SSRFDetectorConfig, type CloudMetadataPattern, type SSRFBypassPattern } from './ssrf.detector';
+export { NoSQLInjectionDetector, type NoSQLInjectionDetectorConfig, type NoSQLPattern } from './nosql-injection.detector';
+export { CSRFDetector, type CSRFDetectorConfig } from './csrf.detector';
+export { XXEDetector, type XXEDetectorConfig, type XXEPattern } from './xxe.detector';
+export { OpenRedirectDetector, type OpenRedirectDetectorConfig } from './open-redirect.detector';
+export { HTTPSmugglingDetector, type HTTPSmugglingDetectorConfig } from './http-smuggling.detector';
+export { JWTDetector, type JWTDetectorConfig } from './jwt.detector';
+export { SSTIDetector, type SSTIDetectorConfig, type SSTIPattern } from './ssti.detector';
 
-// Export examples (user can reference)
-export * from './custom-example';
+// ML-based detector
+export { MLDetector, type MLDetectorOptions } from './ml.detector';
+
+// Examples (reference only)
+export * from './_examples';

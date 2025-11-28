@@ -1,323 +1,171 @@
 # Cloudflare Sentinel
 
 [![npm version](https://badge.fury.io/js/cloudflare-sentinel.svg)](https://www.npmjs.com/package/cloudflare-sentinel)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Custom](https://img.shields.io/badge/License-Cloudflare%20Only-blue.svg)](LICENSE)
 
-**Attack detection and rate limiting middleware for Cloudflare Workers**
+**Pipeline-based security middleware for Cloudflare Workers**
 
-Sentinel protects your Workers with pluggable detectors, attack-based rate limiting, and smart logging. Block SQL injection, XSS, brute force, and more - automatically.
+Protect your Workers with pluggable detectors, multi-level threat response, and configurable actions. Block SQL injection, XSS, brute force, and more.
 
 ## ✨ Features
 
-- 🛡️ **Attack-Based Rate Limiting** - Limit by attack type, not just endpoint
-- 🔌 **Pluggable Detectors** - Extend with custom detection logic
-- ⚡ **Optimized** - Early block check, parallel detection, smart caching
-- 📊 **Smart Logging** - Only log errors/attacks (95% cost reduction)
-- 🔔 **Notifications** - Email & Slack alerts for critical attacks
-- 💰 **Cost-Effective** - $0-11/month for most websites
+- 🔄 **Pipeline Architecture** - Composable detection → scoring → resolution → handling
+- 🛡️ **Multi-Level Thresholds** - Configurable actions per threat level
+- 🔌 **Pluggable Everything** - Detectors, aggregators, resolvers, handlers
+- ⚡ **High Performance** - Parallel detection, early exit, KV caching
+- 🎯 **Route-Based Config** - Different protection per endpoint
+- 💰 **Cost-Effective** - $0 for most websites
 
 ## 🚀 Quick Start
-
-### Installation
 
 ```bash
 npm install cloudflare-sentinel
 ```
 
-### Basic Usage
-
 ```typescript
-import { Sentinel, RateLimitPeriod } from 'cloudflare-sentinel';
+import { 
+  SentinelPipeline,
+  BlocklistDetector,
+  RateLimitDetector,
+  SQLInjectionRequestDetector,
+  MaxScoreAggregator,
+  MultiLevelResolver,
+  LogHandler,
+} from 'cloudflare-sentinel';
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const sentinel = new Sentinel({
-      rateLimiter: env.RATE_LIMITER,
-      db: env.DB,
-      analytics: env.ANALYTICS,
-      
-      // Note: Cloudflare Rate Limiting API only supports 10s or 60s periods
-      attackLimits: {
-        sql_injection: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },  // 60s
-        xss: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },            // 60s
-      },
-    });
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const pipeline = SentinelPipeline.sync([
+      new BlocklistDetector({ kv: env.BLOCKLIST_KV }),
+      new RateLimitDetector({ kv: env.RATE_LIMIT_KV, limit: 100, windowSeconds: 60 }),
+      new SQLInjectionRequestDetector(),
+    ])
+      .score(new MaxScoreAggregator())
+      .resolve(new MultiLevelResolver({
+        levels: [
+          { maxScore: 30, actions: ['log'] },
+          { maxScore: 60, actions: ['log', 'warn'] },
+          { maxScore: 100, actions: ['block', 'notify'] },
+        ],
+      }))
+      .on('log', new LogHandler({ console: true }));
 
-    return sentinel.protect(request, async () => {
-      // Your app logic
-      return new Response('Hello World');
-    });
+    const decision = await pipeline.process(request, { env, ctx });
+    
+    if (decision.has('block')) {
+      return new Response('Blocked', { status: 403 });
+    }
+    
+    return fetch(request);
   },
 };
 ```
 
-### Configuration
-
-```toml
-# wrangler.toml
-[[unsafe.bindings]]
-name = "RATE_LIMITER"
-type = "ratelimit"
-
-[[d1_databases]]
-binding = "DB"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Your D1 database ID
-
-[[analytics_engine_datasets]]
-binding = "ANALYTICS"
-```
-
 ## 📖 Documentation
 
-- [Getting Started](docs/getting-started.md) - Complete setup guide
-- [Detectors Guide](docs/detectors.md) - Built-in & custom detectors
-- [Notifications](docs/notifications.md) - Email & Slack alerts
-- [Architecture](docs/architecture.md) - System design & internals
-- [API Reference](#api-reference) - Full API docs
+- [Getting Started](docs/getting-started.md) - Installation & setup
+- [Architecture](docs/architecture.md) - System design
+- [Notifications](docs/notifications.md) - Slack/email alerts
 
-## 🎯 Examples
+### Component Guides
 
-### Custom Detector
+- [Pipeline](src/pipeline/README.md) - Core orchestration
+- [Detector](src/detector/README.md) - Attack detection
+- [Scoring](src/scoring/README.md) - Score aggregation
+- [Resolver](src/resolver/README.md) - Action resolution
+- [Handler](src/handler/README.md) - Action execution
 
-```typescript
-import { Sentinel, SQLInjectionRequestDetector, XSSRequestDetector } from 'cloudflare-sentinel';
+## 🎯 Built-in Components
 
-const sentinel = new Sentinel({
-  // ...
-  detectors: [
-    new SQLInjectionRequestDetector(),
-    new XSSRequestDetector(),
-    new MyCustomDetector(), // Your detector
-  ],
-});
-```
+### Detectors
+| Type | Detectors |
+|------|-----------|
+| Security | `BlocklistDetector`, `RateLimitDetector`, `ReputationDetector` |
+| Request | `SQLInjectionRequestDetector`, `XSSRequestDetector`, `PathTraversalRequestDetector`, `CommandInjectionDetector`, `SSRFDetector`, `NoSQLInjectionDetector`, `XXEDetector`, `SSTIDetector`, `JWTDetector` |
+| Response | `SQLInjectionResponseDetector`, `XSSResponseDetector`, `PathTraversalResponseDetector` |
+| Behavior | `BruteForceDetector`, `EntropyDetector`, `FailureThresholdDetector` |
+| ML | `MLDetector` - Lightweight ML classifier for request pre-filtering |
 
-Or with endpoint-specific detectors:
-```typescript
-const sentinel = new Sentinel({
-  detectors: {
-    '*': [  // Global detectors
-      new SQLInjectionRequestDetector(),
-      new XSSRequestDetector(),
-    ],
-    '/api/search/*': [  // Endpoint-specific
-      new MyCustomDetector(),
-    ],
-  },
-});
-```
+### Aggregators
+- `MaxScoreAggregator` - Use highest score (any high-severity = block)
+- `WeightedAggregator` - Weighted average with detector weights
 
-### Per-Endpoint Limits
+### Resolvers
+- `DefaultResolver` - Standard thresholds
+- `StrictResolver` - Aggressive blocking
+- `LenientResolver` - Permissive
+- `MultiLevelResolver` - Configurable cascading actions
 
-```typescript
-import { RateLimitPeriod } from 'cloudflare-sentinel';
+### Handlers
+- `LogHandler` - Console/analytics logging
+- `NotifyHandler` - Webhook notifications
+- `BanHandler` - Add to blocklist
+- `BlocklistHandler` - Add to KV blocklist
+- `ReputationHandler` - Update IP reputation score
 
-attackLimits: {
-  // Global - 60s window
-  sql_injection: { limit: 5, period: RateLimitPeriod.ONE_MINUTE, action: 'block' },
-  
-  // Endpoint-specific - 10s burst protection
-  '/api/admin/*': {
-    '*': { limit: 1, period: RateLimitPeriod.TEN_SECONDS, action: 'block' },
-  },
-}
-```
+## 🤖 ML Detector
 
-> **Note**: Cloudflare Rate Limiting API only supports `RateLimitPeriod.TEN_SECONDS` (10s) or `RateLimitPeriod.ONE_MINUTE` (60s).
-
-### With Notifications
+Lightweight binary classifier for suspicious request detection:
 
 ```typescript
-import { NotificationManager, EmailChannel, SlackChannel } from 'cloudflare-sentinel';
+import { MLDetector } from 'cloudflare-sentinel';
 
-const manager = new NotificationManager();
-manager.addChannel(new EmailChannel({ apiKey: env.RESEND_API_KEY, to: ['admin@company.com'] }));
-manager.addChannel(new SlackChannel({ webhookUrl: env.SLACK_WEBHOOK }));
-
-const sentinel = new Sentinel({
-  // ...
-  notification: {
-    enabled: true,
-    manager,
-    realtime: { enabled: true, severities: ['critical', 'high'] },
-  },
-});
+const pipeline = SentinelPipeline.async([
+  new MLDetector(),  // Uses bundled model (~224KB)
+  // ... other detectors
+]);
 ```
 
-See [examples/](examples/) for complete implementations.
+### Custom Model Training
 
-## 🛠️ Built-in Detectors
+```bash
+cd scripts/training
 
-- **SQL Injection** - Request & response detection
-- **XSS** - Cross-site scripting attacks
-- **Path Traversal** - Directory traversal attempts
-- **Brute Force** - Failed login attempts
-- **Command Injection** - OS command injection
+# 1. Download attack payloads
+python3 download_datasets.py
 
-Create your own: [Detector Guide](docs/detectors.md)
+# 2. Generate safe requests
+python3 generate_safe_requests.py --count 50000
 
-## 📊 Smart Logging
-
-Sentinel only logs what matters:
-
-```
-✅ Success (< 400) → Skip logging
-⚠️  Error (>= 400) → Log to Analytics Engine
-🚨 Attack → Log to Analytics + D1 (critical only)
+# 3. Prepare & train
+python3 prepare_dataset.py
+python3 train_classifier.py --data data/dataset.jsonl --output ../../models/classifier.json
 ```
 
-**Result**: 95% cost reduction vs. logging everything
+See [scripts/training/README.md](scripts/training/README.md) for details.
 
-## 🔔 Notifications
+## 📦 Sentinel Proxy Example
 
-Get alerts when attacks happen:
-
-- **Real-time**: Email & Slack on critical attacks
-- **Scheduled**: Hourly/daily summaries via cron
-- **Spike Detection**: Alert on unusual activity
-- **Threshold-based**: Only notify when needed
-
-Setup: [Notifications Guide](docs/notifications.md)
-
-## 💰 Cost Estimate
-
-| Website Size | Requests/Day | Cost/Month |
-|--------------|--------------|------------|
-| Small        | < 100k       | **$0**     |
-| Medium       | 100k-500k    | **$5**     |
-| Large        | > 1M         | **$11**    |
-
-- Cloudflare Rate Limiting API: **FREE**
-- Analytics Engine: **FREE**
-- D1 Database: **FREE** (< 50M reads/month)
-- Email (Resend): **FREE** (100/day) → $1/month if more
-- Slack: **FREE**
-
-## 📦 Full Example: Sentinel Proxy
-
-Complete reverse proxy with protection:
+Ready-to-deploy security proxy for legacy websites:
 
 ```bash
 cd examples/sentinel-proxy
 npm install
-npm run deploy
-```
 
-Features:
-- Full attack protection
-- Metrics endpoint
-- Email & Slack notifications
-- Automatic cleanup
+# Create KV namespaces
+wrangler kv:namespace create BLOCKLIST_KV
+wrangler kv:namespace create RATE_LIMIT_KV
+wrangler kv:namespace create ESCALATION_KV
+
+# Configure wrangler.toml + sentinel.config.ts
+# Deploy
+wrangler deploy
+```
 
 See [examples/sentinel-proxy/](examples/sentinel-proxy/)
 
 ## 🤝 Contributing
 
-We welcome contributions!
-
 1. Fork the repo
-2. Create your feature branch
+2. Create feature branch
 3. Add tests
-4. Submit a pull request
+4. Submit PR
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-**Component Guides** (for contributors):
-- [Detector System](src/detector/README.md)
-- [Notification System](src/notification/README.md)
-- [Middleware](src/middleware/README.md)
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📜 License
 
 MIT © 2025 lploc94
-
----
-
-## API Reference
-
-### Sentinel
-
-Main middleware class.
-
-**Constructor:**
-```typescript
-new Sentinel(config: SentinelConfig)
-```
-
-**Methods:**
-```typescript
-protect(request: Request, next: () => Promise<Response>): Promise<Response>
-```
-
-### SentinelConfig
-
-```typescript
-interface SentinelConfig {
-  // Required
-  rateLimiter: any;
-  
-  // Optional but recommended
-  db?: D1Database;
-  analytics?: AnalyticsEngineDataset;
-  kv?: KVNamespace;
-  
-  // Attack limits (primary method)
-  attackLimits?: Record<string, AttackLimit | Record<string, AttackLimit>>;
-  
-  // Detectors (pluggable) - supports both array and object formats
-  detectors?: IDetector[] | Record<string, IDetector[]>;
-  
-  // Whitelist
-  whitelist?: {
-    ips?: string[];
-    ipRanges?: string[];
-  };
-  
-  // Notifications
-  notification?: {
-    enabled: boolean;
-    manager: NotificationManager;
-    realtime?: RealtimeConfig;
-  };
-}
-```
-
-### AttackLimit
-
-```typescript
-interface AttackLimit {
-  limit: number;          // Max occurrences
-  period: number;         // Time window (seconds)
-  action: 'block' | 'log_only';
-  logOnly?: boolean;      // Deprecated, use action
-}
-```
-
-### Detectors
-
-Create custom detectors:
-
-```typescript
-import { BaseDetector } from 'cloudflare-sentinel';
-
-class MyDetector extends BaseDetector {
-  name = 'my_attack';
-  priority = 80;
-  
-  async detectRequest(request, context) {
-    if (suspicious) {
-      return this.createResult({
-        attackType: 'my_attack',
-        severity: 'high',
-        confidence: 0.9,
-      });
-    }
-    return null;
-  }
-}
-```
-
-See [Detector Guide](docs/detectors.md) for details.
 
 ---
 

@@ -5,23 +5,35 @@
  * Catches localhost, internal IPs, cloud metadata endpoints, and file:// URLs.
  */
 
-import { BaseDetector } from './base';
+import { BaseDetector, type BaseDetectorOptions } from './base';
 import type { DetectorResult } from './base';
 import { AttackType, SecuritySeverity } from '../types';
 
-export interface SSRFDetectorConfig {
-  /** Enable/disable detector */
-  enabled?: boolean;
-  /** Priority (0-100, higher = checked first) */
-  priority?: number;
-  /** Paths to exclude from detection */
-  excludePaths?: string[];
-  /** Fields to exclude from checking (e.g., 'callback_url' if legitimate) */
+/** Cloud metadata pattern definition */
+export interface CloudMetadataPattern {
+  pattern: RegExp;
+  description: string;
+  confidence: number;
+  severity: SecuritySeverity;
+}
+
+/** SSRF bypass pattern definition */
+export interface SSRFBypassPattern {
+  pattern: RegExp;
+  description: string;
+  confidence: number;
+  severity: SecuritySeverity;
+}
+
+export interface SSRFDetectorConfig extends BaseDetectorOptions {
+  /** Fields to exclude from checking - exact match (e.g., 'callback_url' if legitimate) */
   excludeFields?: string[];
-  /** Additional internal IP ranges to check */
-  additionalInternalRanges?: string[];
-  /** Allow localhost in certain environments */
-  allowLocalhost?: boolean;
+  /** Custom cloud metadata patterns - if provided, OVERRIDES built-in */
+  cloudMetadataPatterns?: CloudMetadataPattern[];
+  /** Custom bypass patterns - if provided, OVERRIDES built-in */
+  bypassPatterns?: SSRFBypassPattern[];
+  /** Custom dangerous URL schemes - if provided, OVERRIDES built-in */
+  dangerousSchemes?: string[];
 }
 
 // Internal/Private IP patterns
@@ -48,45 +60,32 @@ const INTERNAL_IP_PATTERNS = [
   /^10\.(0|96|244)\.\d{1,3}\.\d{1,3}$/,
 ];
 
-// Cloud metadata endpoints
-const CLOUD_METADATA_PATTERNS: Array<{ pattern: RegExp; description: string; severity: SecuritySeverity }> = [
-  // AWS metadata
-  {
-    pattern: /169\.254\.169\.254/,
-    description: 'AWS metadata endpoint',
-    severity: SecuritySeverity.CRITICAL,
-  },
-  {
-    pattern: /metadata\.google\.internal/i,
-    description: 'GCP metadata endpoint',
-    severity: SecuritySeverity.CRITICAL,
-  },
-  {
-    pattern: /169\.254\.169\.253/,
-    description: 'AWS ECS metadata endpoint',
-    severity: SecuritySeverity.CRITICAL,
-  },
+// Cloud metadata endpoints with confidence levels
+const CLOUD_METADATA_PATTERNS: CloudMetadataPattern[] = [
+  // AWS - very specific, almost certainly SSRF
+  { pattern: /169\.254\.169\.254/, description: 'AWS EC2 metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  { pattern: /169\.254\.169\.253/, description: 'AWS ECS metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  { pattern: /169\.254\.170\.2/, description: 'AWS ECS task metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
   
-  // Azure metadata
-  {
-    pattern: /169\.254\.169\.254.*metadata/i,
-    description: 'Azure metadata endpoint',
-    severity: SecuritySeverity.CRITICAL,
-  },
+  // GCP
+  { pattern: /metadata\.google\.internal/i, description: 'GCP metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  { pattern: /169\.254\.169\.254.*computeMetadata/i, description: 'GCP compute metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  
+  // Azure
+  { pattern: /169\.254\.169\.254.*metadata.*instance/i, description: 'Azure IMDS', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
   
   // Digital Ocean
-  {
-    pattern: /169\.254\.169\.254.*droplet/i,
-    description: 'Digital Ocean metadata endpoint',
-    severity: SecuritySeverity.CRITICAL,
-  },
+  { pattern: /169\.254\.169\.254.*metadata.*droplet/i, description: 'DigitalOcean metadata', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  
+  // Alibaba Cloud
+  { pattern: /100\.100\.100\.200/i, description: 'Alibaba Cloud metadata', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  
+  // Oracle Cloud
+  { pattern: /169\.254\.169\.254.*opc/i, description: 'Oracle Cloud metadata', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
   
   // Kubernetes
-  {
-    pattern: /kubernetes\.default/i,
-    description: 'Kubernetes default service',
-    severity: SecuritySeverity.HIGH,
-  },
+  { pattern: /kubernetes\.default\.svc/i, description: 'Kubernetes API server', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { pattern: /kubernetes\.default/i, description: 'Kubernetes service', confidence: 0.9, severity: SecuritySeverity.HIGH },
 ];
 
 // Dangerous URL schemes
@@ -100,69 +99,92 @@ const DANGEROUS_SCHEMES = [
   'jar://',
 ];
 
-// SSRF bypass techniques
-const BYPASS_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
-  // URL encoding bypass
-  { pattern: /%2f%2f/i, description: 'URL encoded slashes' },
-  { pattern: /%00/i, description: 'Null byte injection' },
+// SSRF bypass techniques with confidence levels
+// Lower confidence for patterns that could be legitimate
+const BYPASS_PATTERNS: SSRFBypassPattern[] = [
+  // DNS rebinding - very specific, high confidence
+  { pattern: /\.(xip|nip|sslip)\.io/i, description: 'DNS rebinding service', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { pattern: /\.burpcollaborator\.net/i, description: 'Burp Collaborator', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { pattern: /\.oastify\.com/i, description: 'OAST service', confidence: 0.98, severity: SecuritySeverity.HIGH },
   
-  // DNS rebinding
-  { pattern: /xip\.io|nip\.io|sslip\.io/i, description: 'DNS rebinding service' },
+  // Null byte - very suspicious
+  { pattern: /%00/i, description: 'Null byte injection', confidence: 0.9, severity: SecuritySeverity.HIGH },
   
-  // IP address tricks
-  { pattern: /0x[0-9a-f]+/i, description: 'Hex encoded IP' },
-  { pattern: /\d{10,}/i, description: 'Decimal IP representation' },
+  // IP address tricks - uncommon in legitimate traffic
+  { pattern: /0x7f\d{6}/i, description: 'Hex localhost (0x7f...)', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { pattern: /0177\.0+\.0+\.\d+/i, description: 'Octal IP (0177...)', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { pattern: /21307064\d{2}/i, description: 'Decimal localhost', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
   
-  // URL tricks
-  { pattern: /@.*@/, description: 'Double @ sign' },
-  { pattern: /\\\\/, description: 'Backslash in URL' },
+  // URL tricks - suspicious
+  { pattern: /@.*@/, description: 'Double @ sign in URL', confidence: 0.8, severity: SecuritySeverity.MEDIUM },
+  { pattern: /\\\\[^\\]/, description: 'Backslash in URL', confidence: 0.75, severity: SecuritySeverity.MEDIUM },
+  
+  // Encoded characters - can be legitimate, lower confidence
+  { pattern: /%2f%2flocalhost/i, description: 'Encoded localhost URL', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { pattern: /%2f%2f127\./i, description: 'Encoded 127.x URL', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
+  { pattern: /%2f%2f10\./i, description: 'Encoded private IP URL', confidence: 0.8, severity: SecuritySeverity.MEDIUM },
 ];
 
+/**
+ * SSRFDetector - Detect Server-Side Request Forgery attempts
+ * 
+ * Checks for:
+ * - Internal/private IP addresses (localhost, 10.x, 172.16-31.x, 192.168.x)
+ * - Cloud metadata endpoints (AWS, GCP, Azure, etc.)
+ * - Dangerous URL schemes (file://, gopher://, etc.)
+ * - SSRF bypass techniques (DNS rebinding, IP encoding, etc.)
+ * 
+ * @example
+ * ```typescript
+ * // Basic usage
+ * new SSRFDetector({})
+ * 
+ * // Exclude specific fields (e.g., legitimate webhook endpoints)
+ * new SSRFDetector({
+ *   excludeFields: ['webhook_url', 'callback_url'],
+ * })
+ * 
+ * // Access built-in patterns
+ * SSRFDetector.CLOUD_METADATA_PATTERNS
+ * SSRFDetector.BYPASS_PATTERNS
+ * ```
+ */
 export class SSRFDetector extends BaseDetector {
   name = 'ssrf';
-  priority: number;
-  enabled: boolean;
-  
+  phase = 'request' as const;
+  priority = 85; // High priority - critical attack
+
   private config: SSRFDetectorConfig;
-  private excludePathPatterns: RegExp[];
+  private excludeFields: Set<string>;
+  private activeCloudPatterns: CloudMetadataPattern[];
+  private activeBypassPatterns: SSRFBypassPattern[];
+  private activeDangerousSchemes: string[];
+
+  /** Built-in cloud metadata patterns */
+  static readonly CLOUD_METADATA_PATTERNS = CLOUD_METADATA_PATTERNS;
+  /** Built-in bypass patterns */
+  static readonly BYPASS_PATTERNS = BYPASS_PATTERNS;
+  /** Built-in dangerous schemes */
+  static readonly DANGEROUS_SCHEMES = DANGEROUS_SCHEMES;
 
   constructor(config: SSRFDetectorConfig = {}) {
     super();
-    this.config = {
-      enabled: true,
-      priority: 85,  // High priority - critical attack
-      excludePaths: [],
-      excludeFields: [],
-      additionalInternalRanges: [],
-      allowLocalhost: false,
-      ...config,
-    };
+    this.config = config;
     
-    this.priority = this.config.priority!;
-    this.enabled = this.config.enabled!;
-    
-    // Compile exclude path patterns
-    this.excludePathPatterns = (this.config.excludePaths || []).map(p => {
-      const regexPattern = p
-        .replace(/\*\*/g, '.*')
-        .replace(/\*/g, '[^/]*')
-        .replace(/\?/g, '.');
-      return new RegExp(`^${regexPattern}$`);
-    });
+    this.excludeFields = new Set(
+      (config.excludeFields ?? []).map(f => f.toLowerCase())
+    );
+    this.activeCloudPatterns = config.cloudMetadataPatterns ?? CLOUD_METADATA_PATTERNS;
+    this.activeBypassPatterns = config.bypassPatterns ?? BYPASS_PATTERNS;
+    this.activeDangerousSchemes = config.dangerousSchemes ?? DANGEROUS_SCHEMES;
   }
 
   async detectRequest(request: Request, context: any): Promise<DetectorResult | null> {
     const url = new URL(request.url);
     
-    // Check if path is excluded
-    if (this.isPathExcluded(url.pathname)) {
-      return null;
-    }
-    
     // Check query parameters
     for (const [key, value] of url.searchParams) {
       if (this.isFieldExcluded(key)) continue;
-      
       const result = this.checkValue(value, `query.${key}`);
       if (result) return result;
     }
@@ -173,13 +195,11 @@ export class SSRFDetector extends BaseDetector {
       
       try {
         if (contentType.includes('application/json')) {
-          const clonedRequest = request.clone();
-          const body = await clonedRequest.json();
+          const body = await request.clone().json();
           const result = this.checkObject(body, 'body');
           if (result) return result;
         } else if (contentType.includes('application/x-www-form-urlencoded')) {
-          const clonedRequest = request.clone();
-          const formData = await clonedRequest.text();
+          const formData = await request.clone().text();
           const params = new URLSearchParams(formData);
           for (const [key, value] of params) {
             if (this.isFieldExcluded(key)) continue;
@@ -195,98 +215,83 @@ export class SSRFDetector extends BaseDetector {
     return null;
   }
 
-  private isPathExcluded(path: string): boolean {
-    return this.excludePathPatterns.some(pattern => pattern.test(path));
-  }
-
   private isFieldExcluded(field: string): boolean {
-    const lowerField = field.toLowerCase();
-    return (this.config.excludeFields || []).some(f => 
-      lowerField === f.toLowerCase() || lowerField.includes(f.toLowerCase())
-    );
+    // Exact match only
+    return this.excludeFields.has(field.toLowerCase());
   }
 
   private checkValue(value: string, location: string): DetectorResult | null {
     if (!value || typeof value !== 'string') return null;
     
-    // Check for dangerous URL schemes
     const lowerValue = value.toLowerCase();
-    for (const scheme of DANGEROUS_SCHEMES) {
+    const baseConfidence = this.config.baseConfidence;
+    
+    // Check for dangerous URL schemes (highest priority)
+    for (const scheme of this.activeDangerousSchemes) {
       if (lowerValue.includes(scheme)) {
         return this.createResult(
           AttackType.SSRF,
           SecuritySeverity.CRITICAL,
-          0.95,
+          baseConfidence ?? 0.95,
           {
             field: location,
             value: value.substring(0, 200),
             pattern: scheme,
+            rawContent: `Dangerous URL scheme: ${scheme}`,
           },
-          {
-            detector: this.name,
-            description: `Dangerous URL scheme: ${scheme}`,
-          },
+          { detectionType: 'dangerous_scheme', scheme }
         );
       }
     }
     
     // Check for cloud metadata endpoints
-    for (const { pattern, description, severity } of CLOUD_METADATA_PATTERNS) {
+    for (const { pattern, description, confidence, severity } of this.activeCloudPatterns) {
       if (pattern.test(value)) {
         return this.createResult(
           AttackType.SSRF,
           severity,
-          0.95,
+          baseConfidence ?? confidence,
           {
             field: location,
             value: value.substring(0, 200),
             pattern: pattern.source,
+            rawContent: `Matched: ${description}`,
           },
-          {
-            detector: this.name,
-            description,
-          },
+          { detectionType: 'cloud_metadata', matchedPattern: description }
         );
       }
     }
     
-    // Extract hostname from URL-like strings
+    // Extract hostname from URL-like strings and check for internal IPs
     const hostname = this.extractHostname(value);
-    if (hostname) {
-      // Check for internal IPs
-      if (!this.config.allowLocalhost && this.isInternalIP(hostname)) {
-        return this.createResult(
-          AttackType.SSRF,
-          SecuritySeverity.HIGH,
-          0.9,
-          {
-            field: location,
-            value: value.substring(0, 200),
-          },
-          {
-            detector: this.name,
-            description: `Internal IP address detected: ${hostname}`,
-          },
-        );
-      }
+    if (hostname && this.isInternalIP(hostname)) {
+      return this.createResult(
+        AttackType.SSRF,
+        SecuritySeverity.HIGH,
+        baseConfidence ?? 0.95,
+        {
+          field: location,
+          value: value.substring(0, 200),
+          rawContent: `Internal IP detected: ${hostname}`,
+        },
+        { detectionType: 'internal_ip', hostname }
+      );
     }
     
     // Check for SSRF bypass techniques
-    for (const { pattern, description } of BYPASS_PATTERNS) {
+    for (const { pattern, description, confidence, severity } of this.activeBypassPatterns) {
       if (pattern.test(value)) {
         return this.createResult(
           AttackType.SSRF,
-          SecuritySeverity.MEDIUM,
-          0.7,
+          severity,
+          baseConfidence ?? confidence,
           {
             field: location,
             value: value.substring(0, 200),
             pattern: pattern.source,
+            rawContent: `Bypass technique: ${description}`,
           },
-          {
-            detector: this.name,
-            description: `SSRF bypass technique: ${description}`,
-          },
+          { detectionType: 'bypass_technique', matchedPattern: description }
         );
       }
     }

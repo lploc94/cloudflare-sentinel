@@ -2,7 +2,20 @@
  * Base detector interface for extensibility
  */
 
-import type { AttackType, SecuritySeverity } from '../types';
+import { AttackType, SecuritySeverity } from '../types';
+
+/**
+ * Detector execution phase
+ */
+export type DetectorPhase = 'request' | 'response' | 'both';
+
+/**
+ * Base options that all detectors can accept
+ */
+export interface BaseDetectorOptions {
+  /** Base confidence score (0-1) - detector may use this or calculate its own */
+  baseConfidence?: number;
+}
 
 /**
  * Evidence of attack detection
@@ -24,6 +37,8 @@ export interface DetectionEvidence {
 export interface DetectorResult {
   /** Was attack detected */
   detected: boolean;
+  /** Detector name (for weighted scoring and logging) */
+  detectorName: string;
   /** Type of attack */
   attackType: AttackType;
   /** Severity level */
@@ -32,7 +47,7 @@ export interface DetectorResult {
   confidence: number;
   /** Evidence of attack */
   evidence?: DetectionEvidence;
-  /** Additional metadata */
+  /** Additional metadata (phase, timestamp, processingTime, etc.) */
   metadata?: Record<string, any>;
 }
 
@@ -44,8 +59,16 @@ export interface IDetector {
   /** Detector name */
   name: string;
   
+  /** 
+   * Detection phase
+   * - request: runs on incoming request
+   * - response: runs on response
+   * - both: runs on both phases
+   */
+  phase: DetectorPhase;
+  
   /** Priority (higher = checked first) */
-  priority: number;
+  priority?: number;
   
   /** Enabled */
   enabled?: boolean;
@@ -76,7 +99,8 @@ export interface IDetector {
  */
 export abstract class BaseDetector implements IDetector {
   abstract name: string;
-  abstract priority: number;
+  phase: DetectorPhase = 'request';
+  priority: number = 50;
   enabled: boolean = true;
   
   async detectRequest(
@@ -95,7 +119,7 @@ export abstract class BaseDetector implements IDetector {
   }
   
   /**
-   * Helper: Create detection result
+   * Helper: Create detection result (threat detected)
    */
   protected createResult(
     attackType: AttackType,
@@ -106,11 +130,35 @@ export abstract class BaseDetector implements IDetector {
   ): DetectorResult {
     return {
       detected: true,
+      detectorName: this.name,
       attackType,
       severity,
       confidence,
       evidence,
-      metadata,
+      metadata: {
+        timestamp: Date.now(),
+        ...metadata,
+      },
+    };
+  }
+  
+  /**
+   * Helper: Create non-threat result (no detection, but with metadata)
+   * Use for cases like whitelisting, rate limiting, etc.
+   */
+  protected createNonThreatResult(
+    metadata?: Record<string, any>
+  ): DetectorResult {
+    return {
+      detected: false,
+      detectorName: this.name,
+      attackType: AttackType.UNKNOWN,
+      severity: SecuritySeverity.LOW,
+      confidence: 0,
+      metadata: {
+        timestamp: Date.now(),
+        ...metadata,
+      },
     };
   }
 }

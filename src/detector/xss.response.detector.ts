@@ -56,22 +56,21 @@ export class XSSResponseDetector extends BaseDetector {
       
       for (const pattern of dangerousPatterns) {
         if (pattern.test(decodedValue) && responseBody.includes(value)) {
-          return {
-            detected: true,
-            attackType: AttackType.XSS,
-            severity: SecuritySeverity.CRITICAL,
-            confidence: 0.95,
-            evidence: {
+          return this.createResult(
+            AttackType.XSS,
+            SecuritySeverity.CRITICAL,
+            0.95,
+            {
               field: `reflected_param.${key}`,
               value: this.sanitizeValue(value),
               rawContent: `Parameter "${key}" reflected unescaped in response`,
             },
-            metadata: {
+            {
               detectionType: 'reflected_xss',
               parameter: key,
               reflectedValue: this.sanitizeValue(value),
-            },
-          };
+            }
+          );
         }
       }
     }
@@ -102,22 +101,21 @@ export class XSSResponseDetector extends BaseDetector {
     for (const { regex, confidence, type } of leakPatterns) {
       const match = body.match(regex);
       if (match) {
-        return {
-          detected: true,
-          attackType: AttackType.XSS,
-          severity: this.getSeverity(confidence),
+        return this.createResult(
+          AttackType.XSS,
+          this.getSeverity(confidence),
           confidence,
-          evidence: {
+          {
             field: 'response_body',
             value: this.sanitizeValue(match[0]),
             rawContent: `Potential XSS vulnerability: ${type}`,
           },
-          metadata: {
+          {
             detectionType: 'xss_leak',
             leakType: type,
             evidence: this.sanitizeValue(match[0]),
-          },
-        };
+          }
+        );
       }
     }
     

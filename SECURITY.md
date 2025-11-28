@@ -85,104 +85,64 @@ Add Unicode normalization before pattern matching.
 
 ### Deployment
 
-1. **Start with `log_only` mode**
+1. **Start with logging only**
    ```typescript
-   import { RateLimitPeriod } from 'cloudflare-sentinel';
-   
-   // Note: Cloudflare Rate Limiting API only supports 10s or 60s periods
-   attackLimits: {
-     sql_injection: {
-       limit: 100,
-       period: RateLimitPeriod.ONE_MINUTE,  // 60 seconds
-       action: 'log_only'  // Monitor first!
-     }
-   }
+   new MultiLevelResolver({
+     levels: [
+       { maxScore: 100, actions: ['log'] },  // Log everything first
+     ],
+   })
    ```
 
-2. **Monitor for false positives**
-   - Check `/__sentinel/metrics` regularly
-   - Review Analytics Engine data
-   - Adjust confidence thresholds
+2. **Monitor before blocking**
+   - Review logs for false positives
+   - Adjust thresholds gradually
+   - Enable blocking when confident
 
 3. **Use whitelist for trusted sources**
    ```typescript
-   whitelist: {
+   new WhitelistDetector({
      ips: ['1.2.3.4'],
-     userAgents: ['TrustedBot/1.0']
-   }
+     ipRanges: ['10.0.0.0/8'],
+   })
    ```
 
 4. **Protect origin server**
    - Use Cloudflare Tunnel (recommended)
    - Firewall origin to only accept Cloudflare IPs
-   - Validate `CF-Connecting-IP` header
 
 5. **Regular updates**
    - Keep Sentinel updated
    - Review security advisories
-   - Update detector patterns
 
 ### Configuration
 
-1. **Don't expose metrics publicly**
-   ```toml
-   # Protect /__sentinel/metrics with:
-   # - Cloudflare Zero Trust
-   # - Service tokens
-   # - IP whitelist
+1. **Use secrets for sensitive data**
+   ```bash
+   wrangler secret put SLACK_WEBHOOK
    ```
 
-2. **Use environment-specific configs**
+2. **Environment-specific thresholds**
    ```typescript
-   const isProd = env.ENVIRONMENT === 'production';
-   
-   attackLimits: {
-     sql_injection: {
-       limit: isProd ? 1 : 100,
-       action: isProd ? 'block' : 'log_only'
-     }
-   }
+   const thresholds = env.ENVIRONMENT === 'production' 
+     ? STRICT 
+     : RELAXED;
    ```
 
-3. **Enable all security features**
+3. **Multi-level response**
    ```typescript
-   {
-     enableBehaviorTracking: true,
-     enableEarlyBlockCheck: true,
-     enableAnalytics: true,
-     enableD1: true
-   }
+   levels: [
+     { maxScore: 30, actions: ['increment'] },
+     { maxScore: 60, actions: ['log', 'escalate'] },
+     { maxScore: 100, actions: ['block', 'notify'] },
+   ]
    ```
 
 ### Monitoring
 
-1. **Set up alerts**
-   - High-severity attacks
-   - Unusual traffic patterns
-   - Many blocked requests
-
-2. **Review logs regularly**
-   ```sql
-   -- Check blocked IPs
-   SELECT ip_address, COUNT(*) 
-   FROM security_events 
-   WHERE blocked = 1 
-   GROUP BY ip_address 
-   ORDER BY COUNT(*) DESC;
-   ```
-
-3. **Analyze attack trends**
-   - New attack patterns
-   - Targeted endpoints
-   - Geographic distribution
-
-## Known Limitations
-
-See [README.md - Limitations](README.md#-limitations) for:
-- False positive scenarios
-- Attack types not covered
-- Performance constraints
-- Bypass techniques
+1. **Set up notifications** - Alert on high-severity attacks
+2. **Use Analytics Engine** - Track attack patterns
+3. **Review escalation data** - Identify repeat offenders
 
 ## Security Updates
 

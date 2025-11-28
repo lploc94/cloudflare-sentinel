@@ -118,15 +118,6 @@ describe('CommandInjectionDetector', () => {
   });
 
   describe('Exclusions', () => {
-    it('should exclude specified paths', async () => {
-      const detector = new CommandInjectionDetector({ excludePaths: ['/health/*'] });
-      const request = new Request('https://example.com/health/check?cmd=;ls', { method: 'GET' });
-      
-      const result = await detector.detectRequest(request, {});
-      
-      expect(result).toBeNull();
-    });
-
     it('should exclude specified fields', async () => {
       const detector = new CommandInjectionDetector({ excludeFields: ['script'] });
       const request = new Request('https://example.com?script=;ls', { method: 'GET' });

@@ -144,17 +144,6 @@ describe('NoSQLInjectionDetector', () => {
     });
   });
 
-  describe('Exclusions', () => {
-    it('should exclude specified paths', async () => {
-      const detector = new NoSQLInjectionDetector({ excludePaths: ['/admin/*'] });
-      const request = new Request('https://example.com/admin/query?q={"$ne":""}', { method: 'GET' });
-      
-      const result = await detector.detectRequest(request, {});
-      
-      expect(result).toBeNull();
-    });
-  });
-
   describe('Safe Input', () => {
     it('should not detect normal JSON', async () => {
       const detector = new NoSQLInjectionDetector();
