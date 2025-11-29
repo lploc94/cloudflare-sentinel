@@ -1,5 +1,10 @@
 /**
- * Base action resolver classes
+ * Base Action Resolver
+ * 
+ * Abstract base class for action resolution strategies.
+ * Provides helper methods for creating standard actions.
+ * 
+ * @module resolver
  */
 
 import { ActionType, type Action, type ResolverContext } from '../pipeline/types';
@@ -7,13 +12,53 @@ import type { IActionResolver } from './types';
 
 /**
  * Base class for action resolvers
+ * 
+ * Resolvers determine what actions to take based on the threat score.
+ * Subclasses implement the `resolve` method to define the resolution logic.
+ * 
+ * **Available Actions:**
+ * | Action | Method | Description |
+ * |--------|--------|-------------|
+ * | BLOCK | `block()` | Block the request |
+ * | PROCEED | `proceed()` | Allow the request |
+ * | LOG | `log()` | Log the detection |
+ * | NOTIFY | `notify()` | Send notification |
+ * | UPDATE_REPUTATION | `updateReputation()` | Update IP reputation |
+ * 
+ * @example
+ * ```typescript
+ * class CustomResolver extends BaseActionResolver {
+ *   name = 'custom';
+ *   
+ *   async resolve(ctx: ResolverContext): Promise<Action[]> {
+ *     const actions: Action[] = [];
+ *     
+ *     if (ctx.score.score >= 80) {
+ *       actions.push(this.block('High threat score'));
+ *       actions.push(this.notify('security', 'Request blocked'));
+ *     } else {
+ *       actions.push(this.log('info', { score: ctx.score.score }));
+ *       actions.push(this.proceed());
+ *     }
+ *     
+ *     return actions;
+ *   }
+ * }
+ * ```
  */
 export abstract class BaseActionResolver implements IActionResolver {
+  /** Resolver name for identification */
   abstract name: string;
+  
+  /** Resolve threat score into list of actions */
   abstract resolve(ctx: ResolverContext): Promise<Action[]>;
 
   /**
    * Create block action
+   * 
+   * @param reason - Human-readable block reason
+   * @param statusCode - HTTP status code (default: 403)
+   * @returns Block action
    */
   protected block(reason: string, statusCode: number = 403): Action {
     return {

@@ -2,6 +2,16 @@
  * Reputation Detector - Check IP reputation and adjust threat score
  * 
  * Works with ReputationHandler which writes reputation data.
+ * Score decays over time, allowing IPs to recover from temporary bad behavior.
+ * 
+ * **Scoring System:**
+ * - Score starts at 0 (neutral)
+ * - Bad behavior decreases score (negative)
+ * - Score decays towards 0 over time (recovery)
+ * - blockThreshold: CRITICAL severity, immediate block
+ * - warnThreshold: MEDIUM severity, flag for monitoring
+ * 
+ * **Confidence:** Always 1.0 (reputation is calculated fact, not guess)
  */
 
 import { AttackType, SecuritySeverity } from '../types';
@@ -33,14 +43,49 @@ interface ReputationData {
 /**
  * ReputationDetector - Checks IP reputation before other detectors
  * 
+ * Runs first (priority 100) to catch repeat offenders immediately.
+ * Score decays over time allowing recovery from temporary issues.
+ * 
  * @example
  * ```typescript
+ * // Basic usage - block repeat offenders
  * new ReputationDetector({
  *   kv: env.REPUTATION_KV,
  *   blockThreshold: -50,  // Block IPs with reputation <= -50
  *   warnThreshold: -20,   // Flag IPs with reputation <= -20
  * })
+ * 
+ * // Aggressive settings for sensitive endpoints
+ * new ReputationDetector({
+ *   kv: env.REPUTATION_KV,
+ *   blockThreshold: -30,
+ *   warnThreshold: -10,
+ *   decayPerHour: 2,  // Slower recovery
+ * })
+ * 
+ * // Lenient settings for public endpoints
+ * new ReputationDetector({
+ *   kv: env.REPUTATION_KV,
+ *   blockThreshold: -100,
+ *   warnThreshold: -50,
+ *   decayPerHour: 10,  // Faster recovery
+ * })
  * ```
+ * 
+ * @remarks
+ * **How it works:**
+ * 1. ReputationHandler decreases score when attacks detected
+ * 2. ReputationDetector checks score on each request
+ * 3. Score decays towards 0 over time (configurable)
+ * 4. Returns CRITICAL if below blockThreshold
+ * 5. Returns MEDIUM if below warnThreshold
+ * 
+ * **Metadata includes:**
+ * - `storedScore`: Raw score from KV
+ * - `effectiveScore`: After decay applied
+ * - `decayApplied`: Points recovered
+ * - `recentHistory`: Last 3 incidents
+ * - `skipReputationUpdate`: Prevents double-counting
  */
 export class ReputationDetector extends BaseDetector {
   readonly name = 'reputation';

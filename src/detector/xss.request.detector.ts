@@ -30,10 +30,10 @@ export interface XSSRequestDetectorConfig extends BaseDetectorOptions {
 // - 0.85-0.94: Highly suspicious (uncommon in legitimate traffic)
 // - 0.70-0.84: Suspicious (could be legitimate in some contexts)
 const XSS_PATTERNS: XSSPattern[] = [
-  // === CRITICAL - Script injection (very specific) ===
-  { regex: /<script[^>]*>[\s\S]*?<\/script>/i, description: 'Full script tag', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { regex: /<script[\s>]/i, description: 'Script tag open', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /<\/script>/i, description: 'Script tag close', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  // === CRITICAL - Script injection (definite XSS) ===
+  { regex: /<script[^>]*>[\s\S]*?<\/script>/i, description: 'Full script tag', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /<script[\s>]/i, description: 'Script tag open', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  { regex: /<\/script>/i, description: 'Script tag close', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
   
   // === CRITICAL - Event handlers (very specific XSS vectors) ===
   { regex: /\bon(load|error|abort)\s*=/i, description: 'onload/onerror handler', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
@@ -45,10 +45,10 @@ const XSS_PATTERNS: XSSPattern[] = [
   { regex: /\bon(animationstart|animationend|transitionend)\s*=/i, description: 'Animation event handler', confidence: 0.92, severity: SecuritySeverity.HIGH },
   { regex: /\bon(pointerover|pointerenter|pointerleave)\s*=/i, description: 'Pointer event handler', confidence: 0.9, severity: SecuritySeverity.HIGH },
   
-  // === CRITICAL - Protocol handlers ===
-  { regex: /javascript\s*:/i, description: 'JavaScript protocol', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /vbscript\s*:/i, description: 'VBScript protocol', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
-  { regex: /livescript\s*:/i, description: 'LiveScript protocol', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  // === CRITICAL - Protocol handlers (definite XSS) ===
+  { regex: /javascript\s*:/i, description: 'JavaScript protocol', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /vbscript\s*:/i, description: 'VBScript protocol', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /livescript\s*:/i, description: 'LiveScript protocol', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
   // === HIGH - HTML injection (dangerous tags) ===
   { regex: /<iframe[\s>]/i, description: 'iframe injection', confidence: 0.9, severity: SecuritySeverity.HIGH },
@@ -59,9 +59,9 @@ const XSS_PATTERNS: XSSPattern[] = [
   { regex: /<base[\s]+href/i, description: 'base tag injection', confidence: 0.9, severity: SecuritySeverity.HIGH },
   { regex: /<link[\s]+.*href\s*=\s*['"]?javascript:/i, description: 'link with JavaScript', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
   
-  // === HIGH - SVG-based XSS ===
-  { regex: /<svg[^>]*\s+on\w+\s*=/i, description: 'SVG with event handler', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /<svg[^>]*>[\s\S]*?<script/i, description: 'SVG with script', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  // === CRITICAL - SVG-based XSS ===
+  { regex: /<svg[^>]*\s+on\w+\s*=/i, description: 'SVG with event handler', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /<svg[^>]*>[\s\S]*?<script/i, description: 'SVG with script', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   { regex: /<svg[\s>]/i, description: 'SVG tag', confidence: 0.6, severity: SecuritySeverity.LOW },
   
   // === HIGH - Data URL attacks ===
@@ -93,9 +93,9 @@ const XSS_PATTERNS: XSSPattern[] = [
   { regex: /ng-\w+\s*=/i, description: 'Angular directive', confidence: 0.5, severity: SecuritySeverity.LOW },
   { regex: /v-\w+\s*=/i, description: 'Vue directive', confidence: 0.5, severity: SecuritySeverity.LOW },
   
-  // === MEDIUM - IMG tag attacks ===
-  { regex: /<img[^>]+\s+on\w+\s*=/i, description: 'IMG with event handler', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /<img[^>]+src\s*=\s*['"]?javascript:/i, description: 'IMG with javascript: src', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  // === CRITICAL - IMG tag attacks ===
+  { regex: /<img[^>]+\s+on\w+\s*=/i, description: 'IMG with event handler', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /<img[^>]+src\s*=\s*['"]?javascript:/i, description: 'IMG with javascript: src', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   { regex: /<img[^>]+src\s*=\s*['"]?data:/i, description: 'IMG with data: src', confidence: 0.75, severity: SecuritySeverity.MEDIUM },
   
   // === LOW - Form injection (context dependent) ===

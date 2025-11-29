@@ -347,6 +347,9 @@ export class EntropyDetector extends BaseDetector {
 
   /**
    * Default severity based on entropy level
+   * - ≥7.0: HIGH (very likely obfuscated payload)
+   * - ≥6.0: MEDIUM (suspicious)
+   * - ≥5.0: LOW (boundary, needs verification)
    */
   private getDefaultSeverity(entropy: number): SecuritySeverity {
     if (entropy >= 7.0) return SecuritySeverity.HIGH;
@@ -356,12 +359,12 @@ export class EntropyDetector extends BaseDetector {
 
   /**
    * Calculate confidence based on entropy level
+   * Scale: 0.5 (at threshold) to 0.85 (at max entropy)
+   * Capped at 0.85 since entropy is heuristic, not definitive
    */
   private calculateConfidence(entropy: number): number {
-    // Higher entropy = higher confidence
-    // Scale from 0.5 (at threshold) to 0.95 (at max entropy)
     const normalizedEntropy = (entropy - this.config.entropyThreshold) / (8 - this.config.entropyThreshold);
-    return Math.min(0.95, 0.5 + normalizedEntropy * 0.45);
+    return Math.min(0.85, 0.5 + normalizedEntropy * 0.35);
   }
 
   /**

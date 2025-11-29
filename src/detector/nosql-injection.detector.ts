@@ -37,7 +37,7 @@ const MONGODB_OPERATORS: NoSQLPattern[] = [
     pattern: /["']?\$(?:ne|gt|gte)["']?\s*:\s*["']?["']?\s*[}\]]/i,
     description: 'Always-true condition (auth bypass)',
     severity: SecuritySeverity.CRITICAL,
-    confidence: 0.95,  // Very specific pattern
+    confidence: 1.0,  // Definite attack
   },
   
   // Where clause (JavaScript execution)
@@ -45,7 +45,7 @@ const MONGODB_OPERATORS: NoSQLPattern[] = [
     pattern: /["']?\$where["']?\s*:/i,
     description: 'MongoDB $where clause (JavaScript execution)',
     severity: SecuritySeverity.CRITICAL,
-    confidence: 0.9,  // Could be legitimate in some admin tools
+    confidence: 0.95,  // JS execution - very dangerous
   },
   
   // Update operators (data modification)
@@ -53,7 +53,7 @@ const MONGODB_OPERATORS: NoSQLPattern[] = [
     pattern: /["']?\$(?:set|unset|inc|push|pull|addToSet|pop|rename)["']?\s*:/i,
     description: 'MongoDB update operator',
     severity: SecuritySeverity.CRITICAL,
-    confidence: 0.85,  // Could be legitimate in some APIs
+    confidence: 0.9,  // Data modification - dangerous
   },
   
   // Comparison operators (dangerous when user-controlled)
@@ -85,7 +85,7 @@ const MONGODB_OPERATORS: NoSQLPattern[] = [
     pattern: /["']?\$(?:expr|jsonSchema|mod|text)["']?\s*:/i,
     description: 'MongoDB evaluation operator',
     severity: SecuritySeverity.HIGH,
-    confidence: 0.8,
+    confidence: 0.85,
   },
   
   // Aggregation operators
@@ -93,7 +93,7 @@ const MONGODB_OPERATORS: NoSQLPattern[] = [
     pattern: /["']?\$(?:lookup|graphLookup|merge|out)["']?\s*:/i,
     description: 'MongoDB aggregation operator',
     severity: SecuritySeverity.HIGH,
-    confidence: 0.8,
+    confidence: 0.85,
   },
   
   // Type confusion
@@ -112,7 +112,7 @@ const JS_INJECTION_PATTERNS: NoSQLPattern[] = [
     pattern: /function\s*\([^)]*\)\s*\{/i,
     description: 'JavaScript function definition',
     severity: SecuritySeverity.CRITICAL,
-    confidence: 0.95,  // Very specific
+    confidence: 1.0,  // Definite JS injection
   },
   
   // Process/require (RCE)
@@ -120,7 +120,7 @@ const JS_INJECTION_PATTERNS: NoSQLPattern[] = [
     pattern: /(?:process|require|eval|exec)\s*\(/i,
     description: 'JavaScript dangerous function',
     severity: SecuritySeverity.CRITICAL,
-    confidence: 0.95,
+    confidence: 1.0,  // RCE attempt
   },
   
   // Return true (auth bypass)
@@ -128,7 +128,7 @@ const JS_INJECTION_PATTERNS: NoSQLPattern[] = [
     pattern: /return\s+true/i,
     description: 'Return true (auth bypass)',
     severity: SecuritySeverity.CRITICAL,
-    confidence: 0.9,
+    confidence: 0.95,
   },
   
   // Sleep/DoS attacks
@@ -136,7 +136,7 @@ const JS_INJECTION_PATTERNS: NoSQLPattern[] = [
     pattern: /sleep\s*\(\d+\)/i,
     description: 'JavaScript sleep (DoS attack)',
     severity: SecuritySeverity.HIGH,
-    confidence: 0.9,
+    confidence: 0.95,
   },
   
   // this.password/this.username extraction
@@ -144,7 +144,7 @@ const JS_INJECTION_PATTERNS: NoSQLPattern[] = [
     pattern: /this\.(password|username|email|token|secret)/i,
     description: 'Field extraction via this reference',
     severity: SecuritySeverity.HIGH,
-    confidence: 0.85,
+    confidence: 0.9,
   },
 ];
 
@@ -155,7 +155,7 @@ const NOSQL_PAYLOADS: NoSQLPattern[] = [
     pattern: /\{\s*["']?\$[a-z]+["']?\s*:/i,
     description: 'JSON object with MongoDB operator',
     severity: SecuritySeverity.HIGH,
-    confidence: 0.8,
+    confidence: 0.85,
   },
   
   // Array with operator
@@ -163,7 +163,7 @@ const NOSQL_PAYLOADS: NoSQLPattern[] = [
     pattern: /\[\s*\{\s*["']?\$[a-z]+/i,
     description: 'Array with MongoDB operator',
     severity: SecuritySeverity.HIGH,
-    confidence: 0.8,
+    confidence: 0.85,
   },
   
   // Empty object injection (bypass) - very common false positive
@@ -338,12 +338,12 @@ export class NoSQLInjectionDetector extends BaseDetector {
     for (const [key, value] of Object.entries(obj)) {
       const path = `${prefix}.${key}`;
       
-      // Check if key itself contains MongoDB operator
+      // Check if key itself contains MongoDB operator - definite attack
       if (key.startsWith('$')) {
         return this.createResult(
           AttackType.NOSQL_INJECTION,
           SecuritySeverity.CRITICAL,
-          0.95,
+          1.0,
           {
             field: path,
             value: JSON.stringify(obj).substring(0, 200),

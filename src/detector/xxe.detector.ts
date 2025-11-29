@@ -47,25 +47,25 @@ export interface XXEDetectorConfig extends BaseDetectorOptions {
 // - 0.85-0.94: Highly suspicious
 // - 0.70-0.84: Suspicious, could be legitimate in some cases
 const XXE_PATTERNS: XXEPattern[] = [
-  // === CRITICAL - External Entity Declaration ===
+  // === CRITICAL - External Entity Declaration (definite XXE) ===
   {
     pattern: /<!ENTITY\s+\S+\s+SYSTEM\s+["'][^"']*["']/i,
     description: 'SYSTEM entity declaration',
-    confidence: 0.98,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   {
     pattern: /<!ENTITY\s+\S+\s+PUBLIC\s+["'][^"']*["']/i,
     description: 'PUBLIC entity declaration',
-    confidence: 0.98,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   
-  // === CRITICAL - Parameter Entity (often used in blind XXE) ===
+  // === CRITICAL - Parameter Entity (definite XXE) ===
   {
     pattern: /<!ENTITY\s+%\s*\S+\s+SYSTEM/i,
     description: 'Parameter entity with SYSTEM',
-    confidence: 0.99,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   {
@@ -75,37 +75,37 @@ const XXE_PATTERNS: XXEPattern[] = [
     severity: SecuritySeverity.CRITICAL,
   },
   
-  // === CRITICAL - File Protocol (Local File Inclusion) ===
+  // === CRITICAL - File Protocol (definite LFI) ===
   {
     pattern: /<!ENTITY[^>]*file:\/\//i,
     description: 'file:// protocol in entity',
-    confidence: 0.99,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   {
     pattern: /SYSTEM\s+["']file:\/\//i,
     description: 'SYSTEM with file:// protocol',
-    confidence: 0.99,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   
-  // === CRITICAL - Common XXE Payloads ===
+  // === CRITICAL - Common XXE Payloads (definite attack) ===
   {
     pattern: /<!ENTITY[^>]*\/etc\/passwd/i,
     description: 'XXE targeting /etc/passwd',
-    confidence: 0.99,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   {
     pattern: /<!ENTITY[^>]*\/etc\/shadow/i,
     description: 'XXE targeting /etc/shadow',
-    confidence: 0.99,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   {
     pattern: /<!ENTITY[^>]*c:\\windows/i,
     description: 'XXE targeting Windows files',
-    confidence: 0.99,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   
@@ -125,21 +125,21 @@ const XXE_PATTERNS: XXEPattern[] = [
   {
     pattern: /<!ENTITY[^>]*gopher:\/\//i,
     description: 'Gopher protocol in entity',
-    confidence: 0.98,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   
-  // === HIGH - PHP Wrappers ===
+  // === CRITICAL - PHP Wrappers (definite attack) ===
   {
     pattern: /<!ENTITY[^>]*php:\/\/filter/i,
     description: 'PHP filter wrapper in entity',
-    confidence: 0.99,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   {
     pattern: /<!ENTITY[^>]*expect:\/\//i,
     description: 'Expect wrapper in entity',
-    confidence: 0.99,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   
@@ -173,11 +173,11 @@ const XXE_PATTERNS: XXEPattern[] = [
     severity: SecuritySeverity.LOW,
   },
   
-  // === HIGH - Billion Laughs DoS ===
+  // === CRITICAL - Billion Laughs DoS ===
   {
     pattern: /<!ENTITY\s+\S+\s+["'](&\S+;){3,}["']/i,
     description: 'Potential Billion Laughs attack',
-    confidence: 0.95,
+    confidence: 1.0,
     severity: SecuritySeverity.CRITICAL,
   },
   

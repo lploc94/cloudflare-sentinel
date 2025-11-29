@@ -24,50 +24,50 @@ export interface PathTraversalResponseDetectorConfig extends BaseDetectorOptions
 
 // === DIRECTORY LISTING PATTERNS ===
 const DIRECTORY_LISTING_PATTERNS: ResponseLeakPattern[] = [
-  // Apache
-  { regex: /<title>Index of \//i, description: 'Apache directory listing', confidence: 0.98, severity: SecuritySeverity.HIGH },
-  { regex: /\[To Parent Directory\]/i, description: 'IIS directory listing', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  // Apache - definite leak
+  { regex: /<title>Index of \//i, description: 'Apache directory listing', confidence: 1.0, severity: SecuritySeverity.HIGH },
+  { regex: /\[To Parent Directory\]/i, description: 'IIS directory listing', confidence: 1.0, severity: SecuritySeverity.HIGH },
   
-  // Nginx
-  { regex: /<h1>Index of/i, description: 'Nginx directory listing', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  // Nginx - definite leak
+  { regex: /<h1>Index of/i, description: 'Nginx directory listing', confidence: 1.0, severity: SecuritySeverity.HIGH },
   
   // Generic
-  { regex: /Parent Directory.*Size.*Modified/is, description: 'Generic directory listing', confidence: 0.9, severity: SecuritySeverity.HIGH },
-  { regex: /<pre>.*?drwx.*?<\/pre>/is, description: 'Unix directory listing', confidence: 0.92, severity: SecuritySeverity.HIGH },
+  { regex: /Parent Directory.*Size.*Modified/is, description: 'Generic directory listing', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /<pre>.*?drwx.*?<\/pre>/is, description: 'Unix directory listing', confidence: 0.95, severity: SecuritySeverity.HIGH },
 ];
 
 // === FILE CONTENT LEAK PATTERNS ===
 const FILE_LEAK_PATTERNS: ResponseLeakPattern[] = [
-  // === CRITICAL - Private keys & secrets ===
-  { regex: /-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----/, description: 'Private key exposed', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { regex: /-----BEGIN OPENSSH PRIVATE KEY-----/, description: 'SSH private key', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { regex: /-----BEGIN PGP PRIVATE KEY-----/, description: 'PGP private key', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  // === CRITICAL - Private keys & secrets (definite leak) ===
+  { regex: /-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----/, description: 'Private key exposed', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /-----BEGIN OPENSSH PRIVATE KEY-----/, description: 'SSH private key', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /-----BEGIN PGP PRIVATE KEY-----/, description: 'PGP private key', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
-  // Linux shadow file
-  { regex: /root:\$[156y]\$[^\s:]+:[0-9]+:/, description: 'Shadow file hash', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  // Linux shadow file - definite leak
+  { regex: /root:\$[156y]\$[^\s:]+:[0-9]+:/, description: 'Shadow file hash', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
   // === HIGH - System files ===
-  // Linux passwd
-  { regex: /root:x:\d+:\d+:root:\/root:/, description: 'Linux passwd file', confidence: 0.98, severity: SecuritySeverity.HIGH },
-  { regex: /nobody:x:\d+:\d+:/, description: 'Linux passwd file', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  // Linux passwd - definite leak
+  { regex: /root:x:\d+:\d+:root:\/root:/, description: 'Linux passwd file', confidence: 1.0, severity: SecuritySeverity.HIGH },
+  { regex: /nobody:x:\d+:\d+:/, description: 'Linux passwd file', confidence: 0.98, severity: SecuritySeverity.HIGH },
   
-  // === HIGH - Cloud credentials ===
-  { regex: /AKIA[0-9A-Z]{16}/, description: 'AWS Access Key', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
-  { regex: /aws_secret_access_key\s*[=:]\s*[A-Za-z0-9\/+=]{40}/i, description: 'AWS Secret Key', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
-  { regex: /AZURE_[A-Z_]+\s*[=:]\s*["']?[A-Za-z0-9+\/=]{20,}/i, description: 'Azure credential', confidence: 0.9, severity: SecuritySeverity.CRITICAL },
-  { regex: /service_account.*private_key.*-----BEGIN/is, description: 'GCP service account', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  // === CRITICAL - Cloud credentials (definite leak) ===
+  { regex: /AKIA[0-9A-Z]{16}/, description: 'AWS Access Key', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /aws_secret_access_key\s*[=:]\s*[A-Za-z0-9\/+=]{40}/i, description: 'AWS Secret Key', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /AZURE_[A-Z_]+\s*[=:]\s*["']?[A-Za-z0-9+\/=]{20,}/i, description: 'Azure credential', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /service_account.*private_key.*-----BEGIN/is, description: 'GCP service account', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
-  // === HIGH - Database credentials ===
-  { regex: /mongodb(\+srv)?:\/\/[^:]+:[^@]+@/i, description: 'MongoDB connection string', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /postgres:\/\/[^:]+:[^@]+@/i, description: 'PostgreSQL connection string', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /mysql:\/\/[^:]+:[^@]+@/i, description: 'MySQL connection string', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /redis:\/\/:[^@]+@/i, description: 'Redis connection string', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  // === CRITICAL - Database credentials (definite leak) ===
+  { regex: /mongodb(\+srv)?:\/\/[^:]+:[^@]+@/i, description: 'MongoDB connection string', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /postgres:\/\/[^:]+:[^@]+@/i, description: 'PostgreSQL connection string', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /mysql:\/\/[^:]+:[^@]+@/i, description: 'MySQL connection string', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /redis:\/\/:[^@]+@/i, description: 'Redis connection string', confidence: 0.95, severity: SecuritySeverity.HIGH },
   
-  // === HIGH - Environment & config files ===
-  { regex: /DB_PASSWORD\s*[=:]\s*["']?[^\s"']+/i, description: 'Database password in env', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /JWT_SECRET\s*[=:]\s*["']?[^\s"']+/i, description: 'JWT secret exposed', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /API_KEY\s*[=:]\s*["']?[A-Za-z0-9_-]{20,}/i, description: 'API key exposed', confidence: 0.9, severity: SecuritySeverity.HIGH },
-  { regex: /SECRET_KEY\s*[=:]\s*["']?[^\s"']+/i, description: 'Secret key exposed', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  // === CRITICAL - Environment & config files ===
+  { regex: /DB_PASSWORD\s*[=:]\s*["']?[^\s"']+/i, description: 'Database password in env', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /JWT_SECRET\s*[=:]\s*["']?[^\s"']+/i, description: 'JWT secret exposed', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /API_KEY\s*[=:]\s*["']?[A-Za-z0-9_-]{20,}/i, description: 'API key exposed', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /SECRET_KEY\s*[=:]\s*["']?[^\s"']+/i, description: 'Secret key exposed', confidence: 0.95, severity: SecuritySeverity.HIGH },
   
   // === MEDIUM - Config files ===
   { regex: /\[mysqld\][\s\S]*?datadir\s*=/i, description: 'MySQL config file', confidence: 0.9, severity: SecuritySeverity.MEDIUM },

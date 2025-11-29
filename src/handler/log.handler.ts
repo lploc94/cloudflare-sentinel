@@ -1,25 +1,32 @@
 /**
- * Log Handler - Write logs to console or analytics
+ * Log Handler - Write logs to console
+ * 
+ * For Analytics Engine logging, use `AnalyticsHandler` instead.
  */
 
 import type { Action, HandlerContext } from '../pipeline/types';
 import type { IActionHandler } from './types';
 
 export interface LogHandlerOptions {
-  /** Analytics Engine binding */
-  analytics?: AnalyticsEngineDataset;
-  /** Enable console logging */
+  /** Enable console logging (default: true) */
   console?: boolean;
-  /** Log prefix */
+  /** Log prefix (default: '[Sentinel]') */
   prefix?: string;
 }
 
 /**
- * LogHandler - Writes detection logs
+ * LogHandler - Writes detection logs to console
+ * 
+ * For Analytics Engine, use `AnalyticsHandler` instead.
  * 
  * @example
  * ```typescript
+ * import { ActionType, LogHandler } from 'cloudflare-sentinel';
+ * 
  * pipeline.on(ActionType.LOG, new LogHandler({ console: true }));
+ * 
+ * // Custom prefix
+ * pipeline.on(ActionType.LOG, new LogHandler({ prefix: '[WAF]' }));
  * ```
  */
 export class LogHandler implements IActionHandler {
@@ -44,17 +51,6 @@ export class LogHandler implements IActionHandler {
       const prefix = this.options.prefix || '[Sentinel]';
       const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
       console[method](`${prefix}`, logEntry);
-    }
-
-    // Analytics Engine
-    if (this.options.analytics) {
-      this.options.analytics.writeDataPoint({
-        blobs: [
-          JSON.stringify(logEntry),
-        ],
-        doubles: [ctx.score.score],
-        indexes: [ctx.score.level],
-      });
     }
   }
 }

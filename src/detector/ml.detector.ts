@@ -1,17 +1,54 @@
 /**
  * ML-based Detector
  * 
- * Uses a lightweight classifier to detect suspicious requests.
- * Output: confidence (0-1) and severity based on ML score.
+ * Uses a lightweight binary classifier to detect suspicious requests.
+ * Ideal for catching unknown attack patterns not covered by rule-based detectors.
+ * 
+ * **Features:**
+ * - Bundled model (~224KB) trained on attack payloads
+ * - Binary classification: 'safe' vs 'suspicious'
+ * - Confidence score 0-1 from model output
+ * - Fixed HIGH severity (model doesn't know attack type)
+ * - Supports both request and response phases
+ * 
+ * **Best used for:**
+ * - Async monitoring (fire-and-forget)
+ * - Pre-filtering before detailed analysis
+ * - Catching novel/unknown attack patterns
+ * - High-traffic endpoints needing quick triage
  * 
  * @example
  * ```typescript
- * // Use default bundled model
+ * // Basic usage with bundled model
  * new MLDetector()
  * 
- * // Or provide custom model
+ * // With custom trained model
  * new MLDetector({ model: customModelWeights })
+ * 
+ * // Async monitoring pipeline (recommended)
+ * const mlPipeline = createMLMonitoringPipeline({ kv, system });
+ * ctx.waitUntil(mlPipeline.process(request, pctx));
+ * 
+ * // As part of sync pipeline (adds latency)
+ * const pipeline = SentinelPipeline.sync([
+ *   new MLDetector(),
+ *   // other detectors...
+ * ]);
  * ```
+ * 
+ * @remarks
+ * **Model training:**
+ * See `scripts/training/README.md` for custom model training.
+ * 
+ * **Metadata includes:**
+ * - `mlClass`: 'safe' | 'suspicious'
+ * - `mlConfidence`: Model confidence 0-1
+ * - `suspiciousScore`: Probability of suspicious class
+ * 
+ * **Performance:**
+ * - ~1-2ms inference time
+ * - No external API calls
+ * - Works entirely on edge
  */
 
 import { BaseDetector, DetectorResult } from './base';
@@ -26,11 +63,23 @@ export interface MLDetectorOptions {
 
 export class MLDetector extends BaseDetector {
   name = 'ml';
+  phase: 'request' | 'response' | 'both' = 'both'; // Support async monitoring
   private classifier: LinearClassifier;
 
   constructor(options: MLDetectorOptions = {}) {
     super();
     this.classifier = new LinearClassifier(options.model ?? defaultModel as ModelWeights);
+  }
+
+  /**
+   * Response phase - reuse request detection for async monitoring
+   */
+  async detectResponse(
+    request: Request,
+    response: Response,
+    context: any
+  ): Promise<DetectorResult | null> {
+    return this.detectRequest(request, context);
   }
 
   async detectRequest(
@@ -48,28 +97,19 @@ export class MLDetector extends BaseDetector {
       return null;
     }
 
-    // Return detection with score-based confidence and severity
+    // Binary classifier: fixed severity, confidence from model output
+    // finalScore = severityToScore(HIGH=80) × suspiciousScore
     return this.createResult(
       AttackType.UNKNOWN,
-      this.scoreToSeverity(suspiciousScore),
-      suspiciousScore,  // confidence 0-1 (from ML score)
+      SecuritySeverity.HIGH,  // Fixed: binary doesn't know attack type
+      suspiciousScore,        // confidence 0-1 from model
       undefined,
       {
         mlClass: prediction.class,
         mlConfidence: prediction.confidence,
-        needsLLMReview: prediction.confidence < 0.9,
+        suspiciousScore,
       }
     );
-  }
-
-  /**
-   * Map ML score (0-1) to severity
-   */
-  private scoreToSeverity(score: number): SecuritySeverity {
-    if (score >= 0.95) return SecuritySeverity.CRITICAL;
-    if (score >= 0.8) return SecuritySeverity.HIGH;
-    if (score >= 0.6) return SecuritySeverity.MEDIUM;
-    return SecuritySeverity.LOW;
   }
 
   /**

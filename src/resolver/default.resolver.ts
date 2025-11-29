@@ -1,21 +1,74 @@
 /**
  * Default Action Resolver
+ * 
+ * Standard score-to-action mapping with configurable thresholds.
+ * Good for most use cases with balanced security/usability.
+ * 
+ * @module resolver
  */
 
 import type { Action, ResolverContext } from '../pipeline/types';
 import { BaseActionResolver } from './base';
 
+/**
+ * Options for DefaultResolver
+ */
 export interface DefaultResolverOptions {
-  /** Score threshold to block (default: 70) */
+  /** 
+   * Score threshold to block request (default: 70)
+   * Requests with score >= this value will be blocked
+   */
   blockThreshold?: number;
-  /** Score threshold to log warning (default: 40) */
+  
+  /** 
+   * Score threshold to log warning (default: 40)
+   * Requests with score >= this value will log a warning
+   */
   warnThreshold?: number;
-  /** Always log all requests */
+  
+  /** 
+   * Always log all requests, even score 0 (default: false)
+   * Useful for debugging or full audit trails
+   */
   alwaysLog?: boolean;
 }
 
 /**
  * DefaultResolver - Standard score-to-action mapping
+ * 
+ * **Behavior:**
+ * - Score >= blockThreshold (70): BLOCK + NOTIFY
+ * - Score >= warnThreshold (40): LOG warning
+ * - Score > 0: LOG info
+ * - Always: PROCEED (unless blocked)
+ * 
+ * **When to use:**
+ * - General-purpose APIs
+ * - Balanced security/usability requirements
+ * - When you want simple threshold-based blocking
+ * 
+ * @example
+ * ```typescript
+ * import { SentinelPipeline, DefaultResolver } from 'cloudflare-sentinel';
+ * 
+ * // Default thresholds
+ * const pipeline = SentinelPipeline.sync([...detectors])
+ *   .score(...)
+ *   .resolve(new DefaultResolver());
+ * 
+ * // Custom thresholds
+ * const strictPipeline = SentinelPipeline.sync([...detectors])
+ *   .score(...)
+ *   .resolve(new DefaultResolver({
+ *     blockThreshold: 50,   // Block at lower score
+ *     warnThreshold: 20,    // Warn earlier
+ *     alwaysLog: true,      // Log everything
+ *   }));
+ * ```
+ * 
+ * @see StrictResolver for stricter blocking
+ * @see LenientResolver for more permissive blocking
+ * @see MultiLevelResolver for configurable multi-level actions
  */
 export class DefaultResolver extends BaseActionResolver {
   name = 'default';

@@ -19,7 +19,7 @@ npm install cloudflare-sentinel
 ```bash
 wrangler kv:namespace create BLOCKLIST_KV
 wrangler kv:namespace create RATE_LIMIT_KV
-wrangler kv:namespace create ESCALATION_KV
+wrangler kv:namespace create REPUTATION_KV
 ```
 
 ### 2. Configure wrangler.toml
@@ -38,8 +38,8 @@ binding = "RATE_LIMIT_KV"
 id = "<your-ratelimit-id>"
 
 [[kv_namespaces]]
-binding = "ESCALATION_KV"
-id = "<your-escalation-id>"
+binding = "REPUTATION_KV"
+id = "<your-reputation-id>"
 
 # Optional
 [[analytics_engine_datasets]]
@@ -52,13 +52,16 @@ binding = "ANALYTICS"
 import { 
   SentinelPipeline,
   BlocklistDetector,
+  ReputationDetector,
   RateLimitDetector,
   SQLInjectionRequestDetector,
   XSSRequestDetector,
   MaxScoreAggregator,
   MultiLevelResolver,
   LogHandler,
-  NotifyHandler,
+  ReputationHandler,
+  BlocklistHandler,
+  ActionType,
 } from 'cloudflare-sentinel';
 
 export default {
@@ -66,6 +69,7 @@ export default {
     // Build pipeline
     const pipeline = SentinelPipeline.sync([
       new BlocklistDetector({ kv: env.BLOCKLIST_KV }),
+      new ReputationDetector({ kv: env.REPUTATION_KV }),
       new RateLimitDetector({ kv: env.RATE_LIMIT_KV, limit: 100, windowSeconds: 60 }),
       new SQLInjectionRequestDetector(),
       new XSSRequestDetector(),
@@ -73,13 +77,14 @@ export default {
       .score(new MaxScoreAggregator())
       .resolve(new MultiLevelResolver({
         levels: [
-          { maxScore: 30, actions: ['log'] },
-          { maxScore: 60, actions: ['log', 'warn'] },
-          { maxScore: 100, actions: ['block', 'notify'] },
+          { maxScore: 30, actions: [ActionType.LOG] },
+          { maxScore: 60, actions: [ActionType.LOG, ActionType.UPDATE_REPUTATION] },
+          { maxScore: 100, actions: [ActionType.BLOCK, ActionType.UPDATE_REPUTATION, ActionType.NOTIFY] },
         ],
       }))
-      .on('log', new LogHandler({ console: true }))
-      .on('notify', new NotifyHandler({ webhookUrl: env.SLACK_WEBHOOK }));
+      .on(ActionType.LOG, new LogHandler({ console: true }))
+      .on(ActionType.UPDATE_REPUTATION, new ReputationHandler({ kv: env.REPUTATION_KV }))
+      .on(ActionType.BLOCK, new BlocklistHandler({ kv: env.BLOCKLIST_KV }));
 
     // Process request
     const decision = await pipeline.process(request, { env, ctx });
@@ -139,15 +144,15 @@ wrangler deploy
 Configure different actions per threat level:
 
 ```typescript
+import { ActionType } from 'cloudflare-sentinel';
+
 new MultiLevelResolver({
   levels: [
-    { maxScore: 30, actions: ['log'] },                 // Low: log only
-    { maxScore: 60, actions: ['log', 'warn'] },         // Medium: log + warn
-    { maxScore: 100, actions: ['block', 'notify'] },    // High: block + alert
+    { maxScore: 30, actions: [ActionType.LOG] },                          // Low: log only
+    { maxScore: 60, actions: [ActionType.LOG, ActionType.UPDATE_REPUTATION] },  // Medium: track reputation
+    { maxScore: 100, actions: [ActionType.BLOCK, ActionType.UPDATE_REPUTATION, ActionType.NOTIFY] }, // High: block + alert
   ],
 })
-
-Actions cascade - level 3 executes: log + warn + block + notify.
 
 ## Route-Based Config
 

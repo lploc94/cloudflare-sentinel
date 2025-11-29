@@ -1,5 +1,10 @@
 /**
- * SentinelPipeline - Core pipeline for security detection
+ * SentinelPipeline - Core Security Pipeline
+ * 
+ * The main entry point for Cloudflare Sentinel security processing.
+ * Provides a fluent API for composing detectors, scoring, resolution, and handlers.
+ * 
+ * @module pipeline
  */
 
 import type { IDetector, DetectorResult } from '../detector/base';
@@ -9,26 +14,89 @@ import type { IActionHandler } from '../handler/types';
 import type { Action, PipelineContext, HandlerContext } from './types';
 import { Decision } from './decision';
 
+/**
+ * Pipeline execution mode
+ * - 'sync': Returns Decision, used for blocking pipelines
+ * - 'async': Returns void, used for background monitoring
+ */
 type PipelineMode = 'sync' | 'async';
 
 /**
- * SentinelPipeline - Composable security pipeline
+ * SentinelPipeline - Composable security detection pipeline
+ * 
+ * **Architecture:**
+ * ```
+ * Request → Detectors → Aggregator → Resolver → Handlers → Decision
+ *              ↓            ↓           ↓           ↓
+ *           Results      Score       Actions    Execute
+ * ```
+ * 
+ * **Two Modes:**
+ * 
+ * | Mode | Factory | Returns | Use Case |
+ * |------|---------|---------|----------|
+ * | sync | `SentinelPipeline.sync()` | `Decision` | Blocking (return 403) |
+ * | async | `SentinelPipeline.async()` | `void` | Monitoring (log only) |
+ * 
+ * **Fluent API:**
+ * ```typescript
+ * SentinelPipeline.sync([...detectors])
+ *   .score(aggregator)    // Required: How to combine scores
+ *   .resolve(resolver)    // Required: Score → Actions
+ *   .on(actionType, handler)  // Optional: Handle actions
+ * ```
  * 
  * @example
  * ```typescript
+ * import { 
+ *   SentinelPipeline, 
+ *   BlocklistDetector,
+ *   SQLInjectionRequestDetector,
+ *   MaxScoreAggregator,
+ *   MultiLevelResolver,
+ *   LogHandler,
+ *   ActionType,
+ * } from 'cloudflare-sentinel';
+ * 
+ * // Sync pipeline (blocking)
  * const pipeline = SentinelPipeline.sync([
  *   new BlocklistDetector({ kv: env.BLOCKLIST_KV }),
- *   new SqlInjectionDetector(),
+ *   new SQLInjectionRequestDetector(),
  * ])
  *   .score(new MaxScoreAggregator())
- *   .resolve(new DefaultResolver())
- *   .on('log', new LogHandler())
- *   .on('notify', new SlackHandler());
+ *   .resolve(new MultiLevelResolver({
+ *     levels: [
+ *       { maxScore: 50, actions: [ActionType.LOG] },
+ *       { maxScore: 100, actions: [ActionType.BLOCK, ActionType.NOTIFY] },
+ *     ],
+ *   }))
+ *   .on(ActionType.LOG, new LogHandler({ console: true }));
  * 
- * const decision = await pipeline.process(request, { env, ctx });
- * if (decision.has('block')) {
- *   return new Response('Blocked', { status: 403 });
- * }
+ * // In Worker fetch handler
+ * export default {
+ *   async fetch(request, env, ctx) {
+ *     const decision = await pipeline.process(request, { env, ctx });
+ *     
+ *     if (decision.has('block')) {
+ *       return new Response('Blocked', { status: 403 });
+ *     }
+ *     
+ *     return fetch(request);
+ *   }
+ * };
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * // Async pipeline (monitoring only)
+ * const monitorPipeline = SentinelPipeline.async([...detectors])
+ *   .score(new WeightedAggregator())
+ *   .resolve(new DefaultResolver())
+ *   .on(ActionType.LOG, new AnalyticsHandler({ analytics: env.ANALYTICS }));
+ * 
+ * // Fire and forget - doesn't block request
+ * ctx.waitUntil(monitorPipeline.process(request, { env, ctx }));
+ * return fetch(request);
  * ```
  */
 export class SentinelPipeline {
@@ -42,21 +110,59 @@ export class SentinelPipeline {
   ) {}
 
   /**
-   * Create SYNC pipeline - returns Decision
+   * Create SYNC pipeline that returns a Decision
+   * 
+   * Use for blocking pipelines where you need to check
+   * `decision.has('block')` before proceeding.
+   * 
+   * @param detectors - Array of detectors to run
+   * @returns New SentinelPipeline instance
+   * 
+   * @example
+   * ```typescript
+   * const pipeline = SentinelPipeline.sync([
+   *   new BlocklistDetector({ kv }),
+   *   new SQLInjectionRequestDetector(),
+   * ]);
+   * ```
    */
   static sync(detectors: IDetector[]): SentinelPipeline {
     return new SentinelPipeline('sync', detectors);
   }
 
   /**
-   * Create ASYNC pipeline - returns void, executes all handlers
+   * Create ASYNC pipeline that returns void
+   * 
+   * Use for monitoring/logging pipelines that don't block requests.
+   * Typically used with `ctx.waitUntil()` for background processing.
+   * 
+   * @param detectors - Array of detectors to run
+   * @returns New SentinelPipeline instance
+   * 
+   * @example
+   * ```typescript
+   * const pipeline = SentinelPipeline.async([...detectors]);
+   * ctx.waitUntil(pipeline.process(request, { env, ctx }));
+   * ```
    */
   static async(detectors: IDetector[]): SentinelPipeline {
     return new SentinelPipeline('async', detectors);
   }
 
   /**
-   * Set score aggregator
+   * Set score aggregator (required)
+   * 
+   * Determines how multiple detection scores are combined.
+   * 
+   * @param aggregator - Score aggregator instance
+   * @returns this for chaining
+   * 
+   * @example
+   * ```typescript
+   * pipeline.score(new MaxScoreAggregator())
+   * // or
+   * pipeline.score(new WeightedAggregator({ 'sql-injection': 1.5 }))
+   * ```
    */
   score(aggregator: IScoreAggregator): this {
     this.aggregator = aggregator;
@@ -64,7 +170,19 @@ export class SentinelPipeline {
   }
 
   /**
-   * Set action resolver
+   * Set action resolver (required)
+   * 
+   * Determines what actions to take based on the threat score.
+   * 
+   * @param resolver - Action resolver instance
+   * @returns this for chaining
+   * 
+   * @example
+   * ```typescript
+   * pipeline.resolve(new DefaultResolver({ blockThreshold: 70 }))
+   * // or
+   * pipeline.resolve(new MultiLevelResolver({ levels: [...] }))
+   * ```
    */
   resolve(resolver: IActionResolver): this {
     this.resolver = resolver;
@@ -73,6 +191,22 @@ export class SentinelPipeline {
 
   /**
    * Register action handler
+   * 
+   * Handlers are executed when the resolver returns matching actions.
+   * Multiple handlers can be registered for the same action type.
+   * 
+   * @param actionType - Action type to handle (e.g., ActionType.LOG)
+   * @param handler - Handler instance
+   * @returns this for chaining
+   * 
+   * @example
+   * ```typescript
+   * pipeline
+   *   .on(ActionType.LOG, new LogHandler({ console: true }))
+   *   .on(ActionType.NOTIFY, new NotifyHandler({ webhookUrl: '...' }))
+   *   .on(ActionType.BLOCK, new BlocklistHandler({ kv }))
+   *   .on('custom_action', new CustomHandler());
+   * ```
    */
   on(actionType: string, handler: IActionHandler): this {
     this.handlers.set(actionType, handler);
@@ -82,8 +216,22 @@ export class SentinelPipeline {
   /**
    * Process request through pipeline
    * 
-   * SYNC mode: Returns Decision
-   * ASYNC mode: Returns void (executes all handlers)
+   * Runs all request-phase detectors, aggregates scores,
+   * resolves actions, and executes handlers.
+   * 
+   * @param request - Incoming request to analyze
+   * @param ctx - Pipeline context with env and ctx bindings
+   * @returns Decision (sync mode) or void (async mode)
+   * 
+   * @throws Error if aggregator or resolver not configured
+   * 
+   * @example
+   * ```typescript
+   * const decision = await pipeline.process(request, { env, ctx });
+   * if (decision?.has('block')) {
+   *   return new Response('Blocked', { status: 403 });
+   * }
+   * ```
    */
   async process(request: Request, ctx: PipelineContext): Promise<Decision | void> {
     // Validate pipeline configuration

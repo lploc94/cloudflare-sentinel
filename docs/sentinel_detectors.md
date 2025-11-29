@@ -6,14 +6,15 @@ Complete list of all detectors in the `cloudflare-sentinel` package.
 
 | Category | Count | Detectors |
 |----------|-------|-----------|
-| Access Control | 2 | BlocklistDetector, RateLimitDetector |
+| Access Control | 3 | BlocklistDetector, RateLimitDetector, ReputationDetector |
 | Injection | 5 | SQLInjection, XSS, NoSQL, CommandInjection, SSTI |
 | Protocol | 4 | CSRF, XXE, HTTPSmuggling, JWT |
 | Redirect | 2 | OpenRedirect, SSRF |
 | Path | 1 | PathTraversal |
 | Response | 3 | SQLInjection, XSS, PathTraversal (leak detection) |
 | Behavior | 3 | BruteForce, FailureThreshold, Entropy |
-| **Total** | **21** | |
+| ML | 1 | MLDetector |
+| **Total** | **23** | |
 
 ---
 
@@ -25,6 +26,7 @@ Complete list of all detectors in the `cloudflare-sentinel` package.
 |----------|---------|-------------|--------|
 | **BlocklistDetector** | Block requests from IPs or keys stored in KV blocklist | **All endpoints** - Block known attackers, banned users, malicious IPs. Use after incident response to prevent repeat attacks. Essential for production. | `kv: KVNamespace` |
 | **RateLimitDetector** | Limit request rate per IP or custom key | **API endpoints** - Prevent abuse, DoS. **Login endpoints** - Slow down brute force. **Public endpoints** - Enforce fair usage. **Webhook receivers** - Prevent flood. | `limit`, `period`, `kv` or CF API |
+| **ReputationDetector** | Check IP reputation score with decay | **All endpoints** - Runs first (priority 100). Block repeat offenders. Works with ReputationHandler to track bad actors over time. Score decays hourly allowing recovery. | `kv`, `blockThreshold`, `warnThreshold`, `decayPerHour` |
 
 ### Injection Attacks (Request)
 
@@ -74,6 +76,12 @@ Complete list of all detectors in the `cloudflare-sentinel` package.
 | **BruteForceDetector** | Count authentication failures per IP with KV storage | **Auth endpoints** - `/login`, `/signin`, `/auth`, `/api/auth`. **Reset endpoints** - `/forgot-password`, `/verify-code`. **2FA endpoints** - `/verify-otp`. Any endpoint validating credentials. | HIGH |
 | **FailureThresholdDetector** | Generic failure counting for any status codes | **Custom rate-limit scenarios** - Count 4xx/5xx per IP. **Enumeration detection** - Too many 404s on `/users/:id`. **Error spike detection**. Base class for custom failure-based detectors. | Configurable |
 | **EntropyDetector** | Detect high-entropy strings (encoded/encrypted payloads) | **All endpoints (supplementary)** - Detect Base64/encoded attack payloads. Catch obfuscated injections bypassing pattern detection. Useful for endpoints accepting arbitrary strings. | MEDIUM |
+
+### Machine Learning
+
+| Detector | Purpose | When to Use | Severity |
+|----------|---------|-------------|----------|
+| **MLDetector** | Lightweight binary classifier for suspicious requests | **Async monitoring** - Pre-filter requests before detailed analysis. **High-traffic endpoints** - Quick triage. **Unknown attack detection** - Catch patterns not in rule-based detectors. Uses bundled model (~224KB). | HIGH (configurable) |
 
 ---
 
@@ -162,9 +170,9 @@ Execution order (priority DESC, higher runs first):
 
 | Priority | Detector | Reason |
 |----------|----------|--------|
-| 100 | BlocklistDetector | Block known bad actors immediately |
+| 100 | BlocklistDetector, ReputationDetector | Block known bad actors immediately |
 | 98 | HTTPSmugglingDetector | Check protocol-level attacks early |
-| 95 | RateLimitDetector | Prevent flood before processing |
+| 95 | RateLimitDetector, XSSDetector | Prevent flood before processing |
 | 92 | SSTIDetector | Remote Code Execution risk |
 | 90 | CSRFDetector, XXEDetector, SQLInjection | High severity attacks |
 | 88 | JWTDetector | Authentication bypass attacks |
@@ -179,15 +187,16 @@ Execution order (priority DESC, higher runs first):
 
 | Detector | Tests |
 |----------|-------|
-| SQLInjectionRequestDetector | 12 |
-| XSSRequestDetector | 19 |
+| SQLInjectionDetector | 12 |
+| XSSDetector | 19 |
 | PathTraversalDetector | 23 |
 | CommandInjectionDetector | 12 |
 | NoSQLInjectionDetector | 14 |
 | SSRFDetector | 17 |
 | BlocklistDetector | 11 |
 | RateLimitDetector | 21 |
-| BruteForceDetector | 20 |
+| BruteForceDetector | 8 |
+| ReputationDetector | 16 |
 | EntropyDetector | 9 |
 | CSRFDetector | 26 |
 | XXEDetector | 28 |
@@ -195,7 +204,13 @@ Execution order (priority DESC, higher runs first):
 | HTTPSmugglingDetector | 33 |
 | JWTDetector | 26 |
 | SSTIDetector | 30 |
-| **Total** | **364** |
+| MLDetector | 20 |
+| FailureThresholdDetector | 20 |
+| BaseDetector | 9 |
+| ML (murmurhash) | 13 |
+| ExtractUtils | 11 |
+| AnalyticsHandler | 11 |
+| **Total** | **443** |
 
 ---
 

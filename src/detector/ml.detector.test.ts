@@ -136,12 +136,13 @@ describe('MLDetector', () => {
       expect(['low', 'medium', 'high', 'critical']).toContain(result?.severity);
     });
 
-    it('should include needsLLMReview in metadata', async () => {
+    it('should include ML metadata fields', async () => {
       const { request, context } = createRequest('GET', "https://api.example.com/users?id=1' OR '1'='1");
       const result = await detector.detectRequest(request, context);
       
-      expect(result?.metadata).toHaveProperty('needsLLMReview');
-      expect(typeof result?.metadata?.needsLLMReview).toBe('boolean');
+      expect(result?.metadata).toHaveProperty('mlClass');
+      expect(result?.metadata).toHaveProperty('mlConfidence');
+      expect(result?.metadata).toHaveProperty('suspiciousScore');
     });
   });
 });

@@ -52,56 +52,56 @@ export interface SQLInjectionResponseDetectorConfig extends BaseDetectorOptions 
 
 // === SQL ERROR LEAK PATTERNS ===
 const SQL_LEAK_PATTERNS: SQLLeakPattern[] = [
-  // === CRITICAL - Database error messages (very specific) ===
+  // === CRITICAL - Database error messages (definite leak) ===
   
   // MySQL
-  { regex: /You have an error in your SQL syntax/i, description: 'MySQL syntax error', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { regex: /mysql_fetch_/i, description: 'MySQL function leak', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
-  { regex: /mysqli?::/i, description: 'MySQLi leak', confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { regex: /MySQL server version for the right syntax/i, description: 'MySQL version leak', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  { regex: /You have an error in your SQL syntax/i, description: 'MySQL syntax error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /mysql_fetch_/i, description: 'MySQL function leak', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /mysqli?::/i, description: 'MySQLi leak', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { regex: /MySQL server version for the right syntax/i, description: 'MySQL version leak', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
   // PostgreSQL
-  { regex: /PostgreSQL.*?ERROR/i, description: 'PostgreSQL error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /pg_query\(\)/i, description: 'pg_query leak', confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { regex: /psycopg2\.(DatabaseError|OperationalError)/i, description: 'Python psycopg2 error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /PostgreSQL.*?ERROR/i, description: 'PostgreSQL error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /pg_query\(\)/i, description: 'pg_query leak', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { regex: /psycopg2\.(DatabaseError|OperationalError)/i, description: 'Python psycopg2 error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
   // Oracle
-  { regex: /ORA-\d{5}/i, description: 'Oracle error code', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
-  { regex: /Oracle.*?Driver/i, description: 'Oracle driver leak', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /ORA-\d{5}/i, description: 'Oracle error code', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /Oracle.*?Driver/i, description: 'Oracle driver leak', confidence: 0.95, severity: SecuritySeverity.HIGH },
   
   // SQL Server
-  { regex: /Microsoft SQL Server.*?error/i, description: 'MSSQL error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /\[Microsoft\]\[ODBC SQL Server Driver\]/i, description: 'MSSQL ODBC error', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
-  { regex: /System\.Data\.SqlClient/i, description: '.NET SqlClient error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /Microsoft SQL Server.*?error/i, description: 'MSSQL error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /\[Microsoft\]\[ODBC SQL Server Driver\]/i, description: 'MSSQL ODBC error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /System\.Data\.SqlClient/i, description: '.NET SqlClient error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
   // SQLite
-  { regex: /SQLite.*?error/i, description: 'SQLite error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /sqlite3\.(DatabaseError|OperationalError)/i, description: 'Python sqlite3 error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /SQLite.*?error/i, description: 'SQLite error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /sqlite3\.(DatabaseError|OperationalError)/i, description: 'Python sqlite3 error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
   // Generic SQL
-  { regex: /SQLSTATE\[\w+\]/i, description: 'SQLSTATE error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
-  { regex: /SQL\s+syntax.*?error/i, description: 'SQL syntax error', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  { regex: /SQLSTATE\[\w+\]/i, description: 'SQLSTATE error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /SQL\s+syntax.*?error/i, description: 'SQL syntax error', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
   // === HIGH - ORM/Framework errors ===
   
   // PHP PDO
-  { regex: /PDOException/i, description: 'PHP PDO exception', confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { regex: /SQLSTATE\[HY\d+\]/i, description: 'PDO SQLSTATE', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /PDOException/i, description: 'PHP PDO exception', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { regex: /SQLSTATE\[HY\d+\]/i, description: 'PDO SQLSTATE', confidence: 0.95, severity: SecuritySeverity.HIGH },
   
   // Java JDBC
-  { regex: /java\.sql\.SQLException/i, description: 'Java SQLException', confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { regex: /JDBCException/i, description: 'JDBC exception', confidence: 0.9, severity: SecuritySeverity.HIGH },
-  { regex: /org\.hibernate\.exception/i, description: 'Hibernate exception', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /java\.sql\.SQLException/i, description: 'Java SQLException', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { regex: /JDBCException/i, description: 'JDBC exception', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /org\.hibernate\.exception/i, description: 'Hibernate exception', confidence: 0.95, severity: SecuritySeverity.HIGH },
   
   // Node.js ORMs
-  { regex: /PrismaClientKnownRequestError/i, description: 'Prisma error', confidence: 0.9, severity: SecuritySeverity.HIGH },
-  { regex: /SequelizeDatabaseError/i, description: 'Sequelize error', confidence: 0.9, severity: SecuritySeverity.HIGH },
-  { regex: /TypeORMError/i, description: 'TypeORM error', confidence: 0.9, severity: SecuritySeverity.HIGH },
-  { regex: /QueryFailedError/i, description: 'TypeORM query failed', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /PrismaClientKnownRequestError/i, description: 'Prisma error', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /SequelizeDatabaseError/i, description: 'Sequelize error', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /TypeORMError/i, description: 'TypeORM error', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /QueryFailedError/i, description: 'TypeORM query failed', confidence: 0.95, severity: SecuritySeverity.HIGH },
   
   // Python ORMs
-  { regex: /sqlalchemy\.exc\./i, description: 'SQLAlchemy error', confidence: 0.9, severity: SecuritySeverity.HIGH },
-  { regex: /django\.db\.utils/i, description: 'Django DB error', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { regex: /sqlalchemy\.exc\./i, description: 'SQLAlchemy error', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /django\.db\.utils/i, description: 'Django DB error', confidence: 0.95, severity: SecuritySeverity.HIGH },
   
   // === MEDIUM - Query structure leaks ===
   { regex: /SELECT\s+.*?\s+FROM\s+\w+/i, description: 'SELECT query leak', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
@@ -114,9 +114,9 @@ const SQL_LEAK_PATTERNS: SQLLeakPattern[] = [
   { regex: /unknown\s+column\s+['"]\w+['"]/i, description: 'Column name leak', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
   { regex: /column\s+['"]\w+['"].*?not found/i, description: 'Column not found', confidence: 0.85, severity: SecuritySeverity.MEDIUM },
   
-  // === HIGH - Connection string leaks ===
-  { regex: /(Server|Database|User\s*ID|Password)\s*=\s*[^;\s]+/i, description: 'Connection string leak', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
-  { regex: /Data Source\s*=\s*[^;\s]+/i, description: 'Data source leak', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  // === CRITICAL - Connection string leaks (definite leak) ===
+  { regex: /(Server|Database|User\s*ID|Password)\s*=\s*[^;\s]+/i, description: 'Connection string leak', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /Data Source\s*=\s*[^;\s]+/i, description: 'Data source leak', confidence: 0.98, severity: SecuritySeverity.HIGH },
 ];
 
 /**

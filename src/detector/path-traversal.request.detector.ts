@@ -23,20 +23,20 @@ export interface PathTraversalRequestDetectorConfig extends BaseDetectorOptions 
 
 // Built-in patterns with confidence
 const PATH_TRAVERSAL_PATTERNS: PathTraversalPattern[] = [
-  // === CRITICAL - Very specific attack patterns ===
+  // === CRITICAL - Definite attack patterns (confidence: 1.0) ===
   
-  // Sensitive Linux files - almost always malicious
-  { regex: /\/etc\/shadow/, description: 'Linux shadow file', confidence: 0.99 },
-  { regex: /\/etc\/passwd/, description: 'Linux passwd file', confidence: 0.98 },
-  { regex: /\/\.ssh\//, description: 'SSH directory', confidence: 0.98 },
-  { regex: /id_rsa/, description: 'SSH private key', confidence: 0.98 },
-  { regex: /\/\.env/, description: 'Environment file', confidence: 0.95 },
-  { regex: /\/\.git\/config/, description: 'Git config', confidence: 0.95 },
+  // Sensitive Linux files - definite attack
+  { regex: /\/etc\/shadow/, description: 'Linux shadow file', confidence: 1.0 },
+  { regex: /\/etc\/passwd/, description: 'Linux passwd file', confidence: 1.0 },
+  { regex: /\/\.ssh\//, description: 'SSH directory', confidence: 1.0 },
+  { regex: /id_rsa/, description: 'SSH private key', confidence: 1.0 },
+  { regex: /\/\.env/, description: 'Environment file', confidence: 1.0 },
+  { regex: /\/\.git\/config/, description: 'Git config', confidence: 1.0 },
   
-  // Windows sensitive
-  { regex: /\/windows\/system32/i, description: 'Windows system32', confidence: 0.95 },
-  { regex: /c:[/\\]windows/i, description: 'Windows path', confidence: 0.95 },
-  { regex: /boot\.ini/i, description: 'Windows boot.ini', confidence: 0.95 },
+  // Windows sensitive - definite attack
+  { regex: /\/windows\/system32/i, description: 'Windows system32', confidence: 1.0 },
+  { regex: /c:[\/\\]windows/i, description: 'Windows path', confidence: 1.0 },
+  { regex: /boot\.ini/i, description: 'Windows boot.ini', confidence: 1.0 },
   
   // === HIGH - Encoded traversal (evasion attempts) ===
   

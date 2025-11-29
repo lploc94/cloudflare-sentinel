@@ -1,44 +1,98 @@
 /**
  * Multi-Level Action Resolver
  * 
- * Allows configurable threshold levels with custom actions per level.
- * Each level inherits actions from previous levels (cascading).
+ * Fully configurable threshold levels with custom actions per level.
+ * Actions cascade from lower levels to higher levels.
+ * 
+ * @module resolver
  */
 
 import { ActionType, type Action, type ActionTypeValue, type ResolverContext } from '../pipeline/types';
 import { BaseActionResolver } from './base';
 
+/**
+ * Threshold level configuration
+ * 
+ * Defines the maximum score for this level and which actions to trigger.
+ * Actions from all levels up to and including the matched level are executed.
+ */
 export interface ThresholdLevel {
-  /** Maximum score for this level (exclusive for next level) */
+  /** 
+   * Maximum score for this level (inclusive)
+   * Score <= maxScore will match this level
+   */
   maxScore: number;
-  /** Actions to trigger at this level */
+  
+  /** 
+   * Actions to trigger at this level
+   * Can use ActionType enum or custom string actions
+   */
   actions: (ActionTypeValue | string)[];
 }
 
+/**
+ * Options for MultiLevelResolver
+ */
 export interface MultiLevelResolverOptions {
-  /** Threshold levels with actions */
+  /** 
+   * Threshold levels with actions
+   * Will be sorted by maxScore automatically
+   */
   levels: ThresholdLevel[];
 }
 
 /**
  * MultiLevelResolver - Configurable multi-threshold resolver
  * 
- * Example:
- * ```typescript
- * import { ActionType } from '../pipeline/types';
+ * **Key Features:**
+ * - Define multiple threshold levels
+ * - Each level has its own set of actions
+ * - Actions cascade from lower to higher levels
+ * - Supports custom action types
  * 
- * new MultiLevelResolver({
- *   levels: [
- *     { maxScore: 30, actions: [ActionType.LOG] },
- *     { maxScore: 60, actions: [ActionType.LOG, ActionType.NOTIFY] },
- *     { maxScore: 100, actions: [ActionType.BLOCK, ActionType.NOTIFY] },
- *   ]
- * })
+ * **Cascading Example:**
+ * ```
+ * Level 1 (0-30):  [LOG]
+ * Level 2 (31-60): [LOG, UPDATE_REPUTATION]
+ * Level 3 (61+):   [LOG, UPDATE_REPUTATION, BLOCK, NOTIFY]
+ * 
+ * Score 70 → matches Level 3 → executes ALL actions from levels 1-3
  * ```
  * 
- * With score 70:
- * - Level 3 is matched (maxScore: 100)
- * - Actions executed: log + notify + block
+ * **When to use:**
+ * - Complex security policies with multiple response levels
+ * - Different actions for different threat severities
+ * - Custom action types beyond built-in ones
+ * 
+ * @example
+ * ```typescript
+ * import { SentinelPipeline, MultiLevelResolver, ActionType } from 'cloudflare-sentinel';
+ * 
+ * const pipeline = SentinelPipeline.sync([...detectors])
+ *   .score(new MaxScoreAggregator())
+ *   .resolve(new MultiLevelResolver({
+ *     levels: [
+ *       { maxScore: 30, actions: [ActionType.LOG] },
+ *       { maxScore: 60, actions: [ActionType.LOG, ActionType.UPDATE_REPUTATION] },
+ *       { maxScore: 100, actions: [ActionType.BLOCK, ActionType.NOTIFY] },
+ *     ],
+ *   }));
+ * 
+ * // Custom actions
+ * const advancedPipeline = SentinelPipeline.sync([...detectors])
+ *   .score(...)
+ *   .resolve(new MultiLevelResolver({
+ *     levels: [
+ *       { maxScore: 50, actions: [ActionType.LOG] },
+ *       { maxScore: 80, actions: ['escalate'] },  // Custom action
+ *       { maxScore: 100, actions: [ActionType.BLOCK, 'ai_analyze'] },
+ *     ],
+ *   }))
+ *   .on('escalate', new EscalateHandler())
+ *   .on('ai_analyze', new AIHandler());
+ * ```
+ * 
+ * @see DefaultResolver for simpler threshold-based resolution
  */
 export class MultiLevelResolver extends BaseActionResolver {
   name = 'multi-level';

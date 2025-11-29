@@ -26,31 +26,33 @@ export interface CommandInjectionDetectorConfig extends BaseDetectorOptions {
 // Characters that indicate potential shell command
 const SHELL_METACHARACTERS = [';', '|', '&', '`', '$(', '\n', '\r', '>', '<'];
 
-// High confidence patterns - clearly malicious
+// Patterns with confidence: 1.0 = certain attack, lower = possible false positive
 const COMMAND_PATTERNS: Array<{ pattern: RegExp; description: string; severity: SecuritySeverity; confidence: number }> = [
-  // Critical - Clear command injection
-  { pattern: /[;&|]{1,2}\s*(ls|cat|dir|type|whoami|id|uname|pwd|echo|ping|curl|wget|nc|ncat|bash|sh|zsh|cmd|powershell)\b/i, description: 'Command chaining', severity: SecuritySeverity.CRITICAL, confidence: 0.95 },
-  { pattern: /\b(rm\s+-rf|chmod\s+777|mkfs|dd\s+if=)\b/i, description: 'Dangerous system commands', severity: SecuritySeverity.CRITICAL, confidence: 0.95 },
-  { pattern: /\b(bash|sh|nc|ncat)\s+.*\s+-[ie]/i, description: 'Potential reverse shell', severity: SecuritySeverity.CRITICAL, confidence: 0.95 },
-  { pattern: /\|\s*base64\s+-d/i, description: 'Base64 decode pipe', severity: SecuritySeverity.CRITICAL, confidence: 0.9 },
+  // Critical - Definite attack (confidence: 1.0)
+  { pattern: /\b(rm\s+-rf|chmod\s+777|mkfs|dd\s+if=)\b/i, description: 'Dangerous system commands', severity: SecuritySeverity.CRITICAL, confidence: 1.0 },
+  { pattern: /\b(bash|sh|nc|ncat)\s+.*\s+-[ie]/i, description: 'Reverse shell', severity: SecuritySeverity.CRITICAL, confidence: 1.0 },
+  { pattern: /\b(nc|ncat|netcat)\s+(-e|-c|--exec)/i, description: 'Netcat exec', severity: SecuritySeverity.CRITICAL, confidence: 1.0 },
+  { pattern: /[;&|]{1,2}\s*(whoami|id|uname)\b/i, description: 'Command chaining with recon', severity: SecuritySeverity.CRITICAL, confidence: 1.0 },
   
-  // High - Likely malicious
+  // Critical - Very likely attack (confidence: 0.95)
+  { pattern: /[;&|]{1,2}\s*(ls|cat|dir|type|pwd|echo|ping|curl|wget|bash|sh|zsh|cmd|powershell)\b/i, description: 'Command chaining', severity: SecuritySeverity.CRITICAL, confidence: 0.95 },
+  { pattern: /\|\s*base64\s+-d/i, description: 'Base64 decode pipe', severity: SecuritySeverity.CRITICAL, confidence: 0.95 },
+  
+  // High - Likely attack (confidence: 0.9)
   { pattern: /\$\(\s*(cat|ls|id|whoami|uname|pwd|curl|wget|nc)\b/i, description: '$() with command', severity: SecuritySeverity.HIGH, confidence: 0.9 },
   { pattern: /`\s*(cat|ls|id|whoami|uname|pwd|curl|wget|nc)\b[^`]*`/i, description: 'Backtick with command', severity: SecuritySeverity.HIGH, confidence: 0.9 },
   { pattern: /\b(curl|wget)\s+[^\s]*\s*\|/i, description: 'Download and pipe', severity: SecuritySeverity.HIGH, confidence: 0.9 },
-  { pattern: /\b(nc|ncat|netcat)\s+(-e|-c|--exec)/i, description: 'Netcat with exec', severity: SecuritySeverity.CRITICAL, confidence: 0.95 },
-  { pattern: /\b(cmd\.exe|powershell\.exe|certutil|bitsadmin)\s+/i, description: 'Windows command execution', severity: SecuritySeverity.HIGH, confidence: 0.9 },
+  
+  // High - Suspicious (confidence: 0.85)
+  { pattern: /\b(cmd\.exe|powershell\.exe|certutil|bitsadmin)\s+/i, description: 'Windows command execution', severity: SecuritySeverity.HIGH, confidence: 0.85 },
   { pattern: />\s*\/?(tmp|dev|etc)\//i, description: 'Redirect to system path', severity: SecuritySeverity.HIGH, confidence: 0.85 },
   { pattern: /<\s*\/?(etc|proc)\//i, description: 'Read from system path', severity: SecuritySeverity.HIGH, confidence: 0.85 },
   
-  // Medium - Suspicious but could be legitimate
-  { pattern: /\/bin\/(sh|bash)\s/i, description: 'Direct shell path', severity: SecuritySeverity.MEDIUM, confidence: 0.8 },
-  { pattern: /\/etc\/(passwd|shadow|hosts)/i, description: 'Sensitive file path', severity: SecuritySeverity.MEDIUM, confidence: 0.8 },
-  { pattern: /\|\|\s*(curl|wget|sh|bash)/i, description: 'OR operator with command', severity: SecuritySeverity.MEDIUM, confidence: 0.8 },
-  { pattern: /&&\s*(curl|wget|sh|bash)/i, description: 'AND operator with command', severity: SecuritySeverity.MEDIUM, confidence: 0.8 },
-  
-  // Note: Removed generic ${} and `` patterns - too many false positives
-  // Only match when combined with known commands
+  // Medium - Could be legitimate (confidence: 0.7)
+  { pattern: /\/bin\/(sh|bash)\s/i, description: 'Direct shell path', severity: SecuritySeverity.MEDIUM, confidence: 0.7 },
+  { pattern: /\/etc\/(passwd|shadow|hosts)/i, description: 'Sensitive file path', severity: SecuritySeverity.MEDIUM, confidence: 0.7 },
+  { pattern: /\|\|\s*(curl|wget|sh|bash)/i, description: 'OR operator with command', severity: SecuritySeverity.MEDIUM, confidence: 0.7 },
+  { pattern: /&&\s*(curl|wget|sh|bash)/i, description: 'AND operator with command', severity: SecuritySeverity.MEDIUM, confidence: 0.7 },
 ];
 
 /**

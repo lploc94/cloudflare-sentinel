@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2025-11-29
+
+### Added
+- **AnalyticsHandler** - New handler for Cloudflare Analytics Engine logging
+  - Configurable source, category, and index extraction
+  - Full evidence serialization support
+- **IP Extraction Utilities** - `extractIP()` and `extractIPFromContext()` helpers
+  - Supports CF-Connecting-IP, X-Real-IP, X-Forwarded-For headers
+- **Comprehensive Test Suite** - 609 tests covering all components
+  - Handler tests: LogHandler, NotifyHandler, BlocklistHandler, ReputationHandler, AnalyticsHandler
+  - Scoring tests: MaxScoreAggregator, WeightedAggregator
+  - Resolver tests: DefaultResolver, StrictResolver, LenientResolver, MultiLevelResolver
+  - Pipeline tests: SentinelPipeline, Decision
+  - ML tests: HashingVectorizer, LinearClassifier
+
+### Changed
+- **LogHandler** - Removed `analytics` option (use AnalyticsHandler instead)
+- **Documentation** - Comprehensive JSDoc for all modules
+  - Scoring: Severity/level tables, aggregator comparisons
+  - Resolver: Threshold behaviors, use case recommendations
+  - Pipeline: Architecture diagrams, sync/async examples
+  - ML: sklearn compatibility notes, algorithm explanations
+- **Getting Started** - Updated with ActionType enum, ReputationDetector examples
+- **Notifications** - Fixed examples to use ActionType enum
+
+### Fixed
+- **sentinel-proxy example** - Fixed non-existent handler imports
+  - Replaced IncrementHandler, EscalateHandler, BanHandler with actual handlers
+  - Updated to use ActionType enum instead of strings
+- **Threshold configurations** - Consistent ActionType usage across all examples
+
 ## [2.0.1] - 2025-11-29
 
 ### Changed

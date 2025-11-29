@@ -1,16 +1,51 @@
 /**
- * MurmurHash3 (x86_32) - Pure TypeScript implementation
+ * MurmurHash3 (x86_32) - Pure TypeScript Implementation
  * 
- * Matches scikit-learn's HashingVectorizer exactly.
- * Reference: https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+ * Fast, non-cryptographic hash function used by HashingVectorizer.
+ * Matches scikit-learn's implementation exactly for model compatibility.
+ * 
+ * **Properties:**
+ * - Fast: ~3GB/s on modern CPUs
+ * - Good distribution: Excellent avalanche properties
+ * - Non-cryptographic: Not suitable for security purposes
+ * 
+ * **Reference:**
+ * - Original: https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+ * - sklearn: Uses MurmurHash3 for HashingVectorizer
+ * 
+ * @module ml
+ * 
+ * @example
+ * ```typescript
+ * import { murmurhash3_32 } from 'cloudflare-sentinel';
+ * 
+ * const encoder = new TextEncoder();
+ * const bytes = encoder.encode('hello');
+ * const hash = murmurhash3_32(bytes, 0);
+ * console.log(hash); // 613153351
+ * ```
  */
 
 /**
  * MurmurHash3 32-bit hash function
  * 
+ * Computes a 32-bit hash value from byte array input.
+ * Uses the x86_32 variant for compatibility with sklearn.
+ * 
  * @param key - UTF-8 encoded bytes (Uint8Array)
  * @param seed - Hash seed (default: 0, matches sklearn)
  * @returns Unsigned 32-bit hash value
+ * 
+ * @example
+ * ```typescript
+ * const encoder = new TextEncoder();
+ * 
+ * // Basic usage
+ * const hash = murmurhash3_32(encoder.encode('test'), 0);
+ * 
+ * // With custom seed
+ * const hash2 = murmurhash3_32(encoder.encode('test'), 42);
+ * ```
  */
 export function murmurhash3_32(key: Uint8Array, seed: number = 0): number {
   const remainder = key.length & 3;

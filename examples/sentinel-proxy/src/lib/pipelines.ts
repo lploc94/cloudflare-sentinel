@@ -14,9 +14,9 @@ import {
   DefaultResolver,
   LogHandler,
   NotifyHandler,
-  IncrementHandler,
-  EscalateHandler,
-  BanHandler,
+  BlocklistHandler,
+  ReputationHandler,
+  ActionType,
 } from 'cloudflare-sentinel';
 
 import type { Env } from './types';
@@ -68,26 +68,20 @@ export function buildPipeline(
     .score(new MaxScoreAggregator())
     .resolve(new MultiLevelResolver({ levels }))
     // Handlers for each action type
-    .on('increment', new IncrementHandler({
-      kv: env.RATE_LIMIT_KV,
-      ttl: 60,
-    }))
-    .on('log', new LogHandler({
+    .on(ActionType.LOG, new LogHandler({
       console: env.DEBUG === 'true',
-      analytics: env.ANALYTICS,
     }))
-    .on('escalate', new EscalateHandler({
-      kv: env.ESCALATION_KV,
-      multiplier: 1.5,
+    .on(ActionType.UPDATE_REPUTATION, new ReputationHandler({
+      kv: env.REPUTATION_KV,
     }))
-    .on('ban', new BanHandler({
+    .on(ActionType.BLOCK, new BlocklistHandler({
       kv: env.BLOCKLIST_KV,
-      duration: 3600,  // 1 hour
+      defaultDuration: 3600,  // 1 hour
     }));
   
   // Add Slack notification
   if (env.SLACK_WEBHOOK) {
-    pipeline = pipeline.on('notify', new NotifyHandler({
+    pipeline = pipeline.on(ActionType.NOTIFY, new NotifyHandler({
       webhookUrl: env.SLACK_WEBHOOK,
     }));
   }

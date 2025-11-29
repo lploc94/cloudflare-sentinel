@@ -1,42 +1,103 @@
 /**
- * HashingVectorizer - Pure TypeScript implementation
+ * HashingVectorizer - Pure TypeScript Implementation
  * 
- * Matches scikit-learn's HashingVectorizer with:
- * - analyzer='char_wb' (character n-grams with word boundaries)
- * - alternate_sign=False
- * - norm=None
+ * Converts text into fixed-size feature vectors using the hashing trick.
+ * Matches scikit-learn's HashingVectorizer for model compatibility.
+ * 
+ * **Key Properties:**
+ * - No vocabulary to store (memory efficient)
+ * - Fixed output size regardless of vocabulary
+ * - Compatible with sklearn models trained with same config
+ * 
+ * **sklearn Compatibility:**
+ * ```python
+ * from sklearn.feature_extraction.text import HashingVectorizer
+ * 
+ * vectorizer = HashingVectorizer(
+ *     n_features=4096,
+ *     analyzer='char_wb',
+ *     ngram_range=(3, 5),
+ *     alternate_sign=False,
+ *     norm=None
+ * )
+ * ```
+ * 
+ * @module ml
  * 
  * @example
  * ```typescript
- * const vectorizer = new HashingVectorizer({ nFeatures: 4096, ngramRange: [3, 5] });
- * const indices = vectorizer.transform('SELECT * FROM users');
- * // indices: [123, 456, 789, ...] - feature indices for ML model
+ * import { HashingVectorizer } from 'cloudflare-sentinel';
+ * 
+ * const vectorizer = new HashingVectorizer({
+ *   nFeatures: 4096,
+ *   ngramRange: [3, 5],
+ *   analyzer: 'char_wb',
+ * });
+ * 
+ * // Sparse representation (for classifier)
+ * const features = vectorizer.transform('SELECT * FROM users');
+ * // Map { 123 => 2, 456 => 1, ... }
+ * 
+ * // Dense array
+ * const dense = vectorizer.transformDense('text');
+ * // Float32Array(4096)
  * ```
  */
 
 import { murmurhash3_32 } from './murmurhash3';
 
+/**
+ * Options for HashingVectorizer
+ */
 export interface HashingVectorizerOptions {
-  /** Number of features (default: 4096) */
+  /** 
+   * Number of features (hash buckets)
+   * @default 4096
+   */
   nFeatures?: number;
-  /** N-gram range [min, max] (default: [3, 5]) */
+  
+  /** 
+   * N-gram range [min, max]
+   * @default [3, 5]
+   */
   ngramRange?: [number, number];
-  /** Analyzer type (default: 'char_wb') */
+  
+  /** 
+   * Character analysis mode
+   * - 'char_wb': Word-boundary aware (recommended)
+   * - 'char': Simple character n-grams
+   * @default 'char_wb'
+   */
   analyzer?: 'char_wb' | 'char';
 }
 
 /**
- * HashingVectorizer compatible with scikit-learn
+ * HashingVectorizer for text-to-features transformation
  * 
- * Use with sklearn config:
- * ```python
- * HashingVectorizer(
- *   n_features=4096,
- *   analyzer='char_wb',
- *   ngram_range=(3, 5),
- *   alternate_sign=False,
- *   norm=None
- * )
+ * **Algorithm:**
+ * 1. Extract character n-grams from text
+ * 2. Hash each n-gram using MurmurHash3
+ * 3. Map hash to feature index (hash % nFeatures)
+ * 4. Count occurrences per index
+ * 
+ * **Analyzer Modes:**
+ * - `char_wb`: Pads each word with spaces, extracts n-grams
+ *   - "hello" → " hello " → " he", "hel", "ell", "llo", "lo ", ...
+ * - `char`: Direct character n-grams without word awareness
+ *   - "hello" → "hel", "ell", "llo", ...
+ * 
+ * @example
+ * ```typescript
+ * const vectorizer = new HashingVectorizer({ nFeatures: 1024 });
+ * 
+ * // Transform returns sparse Map
+ * const sparse = vectorizer.transform('attack payload');
+ * for (const [index, count] of sparse) {
+ *   console.log(`Feature ${index}: ${count}`);
+ * }
+ * 
+ * // For models expecting dense input
+ * const dense = vectorizer.transformDense('attack payload');
  * ```
  */
 export class HashingVectorizer {

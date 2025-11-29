@@ -1,7 +1,20 @@
 /**
  * Brute Force Detector
- * Specialized detector for brute force attacks on authentication endpoints
- * Extends FailureThresholdDetector with auth-specific defaults
+ * 
+ * Specialized detector for brute force attacks on authentication endpoints.
+ * Pre-configured FailureThresholdDetector with auth-specific defaults.
+ * 
+ * **Features:**
+ * - Counts 401/403 responses (auth failures)
+ * - Per-IP tracking with KV storage
+ * - Auto-expiring counters (windowSeconds)
+ * - Configurable threshold and window
+ * 
+ * **When to use:**
+ * - Login endpoints (`/login`, `/signin`)
+ * - Password reset (`/forgot-password`)
+ * - 2FA verification (`/verify-otp`)
+ * - API key validation endpoints
  */
 
 import { AttackType } from '../types';
@@ -36,20 +49,33 @@ export interface BruteForceDetectorOptions {
  *   windowSeconds: 300,  // within 5 minutes
  * })
  * 
- * // Usage with pipeline routing
- * if (url.pathname === '/api/login') {
- *   const pipeline = SentinelPipeline.sync([
- *     new BruteForceDetector({ kv: env.SECURITY_KV }),
- *   ]).score(...).resolve(...);
- *   // ...
+ * // Usage with response pipeline (must see response)
+ * const responsePipeline = SentinelPipeline.response([
+ *   new BruteForceDetector({ kv: env.SECURITY_KV }),
+ * ]);
+ * 
+ * // After getting response from origin
+ * const decision = await responsePipeline.process(request, response, ctx);
+ * if (decision.has('block_user')) {
+ *   // Block user for future requests
  * }
  * ```
  * 
  * @remarks
- * - Extends `FailureThresholdDetector` with auth-specific defaults
- * - Only counts 401/403 responses
- * - KV entries auto-expire after `windowSeconds`
- * - No caching on KV reads for accuracy
+ * **How it works:**
+ * 1. Runs on response phase (needs status code)
+ * 2. Counts 401/403 responses per IP
+ * 3. Triggers when count >= threshold within window
+ * 4. KV entries auto-expire after `windowSeconds`
+ * 
+ * **Defaults:**
+ * - threshold: 5 failures
+ * - windowSeconds: 60 seconds
+ * - failureStatuses: [401, 403]
+ * - keyPrefix: 'brute'
+ * 
+ * **Severity:** MEDIUM when triggered
+ * **AttackType:** BRUTE_FORCE
  */
 export class BruteForceDetector extends FailureThresholdDetector {
   name = 'brute-force';

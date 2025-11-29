@@ -1,27 +1,53 @@
 /**
- * Lightweight Classifier for request classification
+ * Lightweight ML Classifier
  * 
- * Supports models exported from scikit-learn:
- * - LogisticRegression
- * - LinearSVC
- * - SGDClassifier
+ * Pure TypeScript implementation of linear classifiers for real-time
+ * request classification in Cloudflare Workers. No external dependencies.
  * 
- * Model format (JSON):
+ * **Supported Model Types:**
+ * - LogisticRegression (sklearn)
+ * - LinearSVC (sklearn)
+ * - SGDClassifier (sklearn)
+ * 
+ * **Model Format (JSON):**
  * ```json
  * {
  *   "type": "logistic_regression",
  *   "classes": ["safe", "sqli", "xss", "cmd_injection"],
  *   "weights": [[...], [...], ...],  // shape: [n_classes, n_features]
- *   "bias": [0.1, -0.2, ...]          // shape: [n_classes]
+ *   "bias": [0.1, -0.2, ...],         // shape: [n_classes]
+ *   "vectorizer": {
+ *     "nFeatures": 4096,
+ *     "ngramRange": [3, 5],
+ *     "analyzer": "char_wb"
+ *   }
  * }
  * ```
  * 
+ * **Training:** See `/scripts/training/README.md` for training custom models.
+ * 
+ * **Performance:**
+ * - Uses Float32Array for memory efficiency
+ * - Sparse dot product for fast inference
+ * - ~1-5ms per prediction on Workers
+ * 
+ * @module ml
+ * 
  * @example
  * ```typescript
- * const model = new LinearClassifier(modelJson);
- * const features = vectorizer.transform(requestText);
- * const prediction = model.predict(features);
- * // { class: 'sqli', confidence: 0.92, probabilities: {...} }
+ * import { LinearClassifier } from 'cloudflare-sentinel';
+ * import modelJson from './models/classifier.json';
+ * 
+ * const classifier = new LinearClassifier(modelJson);
+ * 
+ * // Classify raw text
+ * const prediction = classifier.predictText('SELECT * FROM users WHERE id=1');
+ * console.log(prediction.class);      // 'sqli'
+ * console.log(prediction.confidence); // 0.92
+ * 
+ * // Or use with pre-computed features
+ * const features = vectorizer.transform(text);
+ * const prediction = classifier.predict(features);
  * ```
  */
 
@@ -56,7 +82,29 @@ export interface Prediction {
 }
 
 /**
- * Linear classifier for request classification
+ * Linear classifier for binary or multi-class classification
+ * 
+ * Implements linear classification with softmax probabilities.
+ * Compatible with scikit-learn exported models.
+ * 
+ * **How it works:**
+ * 1. Text → HashingVectorizer → sparse features
+ * 2. Features × Weights + Bias → raw scores
+ * 3. Softmax(scores) → probabilities
+ * 4. argmax(probabilities) → predicted class
+ * 
+ * @example
+ * ```typescript
+ * // Load model from JSON
+ * import modelJson from './classifier.json';
+ * const classifier = new LinearClassifier(modelJson);
+ * 
+ * // Predict from text
+ * const result = classifier.predictText('user input');
+ * if (result.class !== 'safe' && result.confidence > 0.8) {
+ *   console.log('Attack detected:', result.class);
+ * }
+ * ```
  */
 export class LinearClassifier {
   private classes: string[];
@@ -65,6 +113,11 @@ export class LinearClassifier {
   private nFeatures: number;
   private vectorizer: HashingVectorizer;
 
+  /**
+   * Create classifier from model weights
+   * 
+   * @param model - Exported model weights (from training script)
+   */
   constructor(model: ModelWeights) {
     this.classes = model.classes;
     this.nFeatures = model.weights[0].length;

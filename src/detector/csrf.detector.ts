@@ -160,7 +160,7 @@ export class CSRFDetector extends BaseDetector {
         return this.createResult(
           AttackType.CSRF,
           SecuritySeverity.LOW,
-          0.6,
+          0.5,
           {
             field: 'header',
             value: `Missing ${headerName}`,
@@ -186,7 +186,7 @@ export class CSRFDetector extends BaseDetector {
         return this.createResult(
           AttackType.CSRF,
           SecuritySeverity.MEDIUM,
-          0.7,
+          0.6,
           {
             field: 'header',
             value: 'Missing Origin',
@@ -207,7 +207,7 @@ export class CSRFDetector extends BaseDetector {
         return this.createResult(
           AttackType.CSRF,
           SecuritySeverity.MEDIUM,
-          0.7,
+          0.6,
           {
             field: 'origin',
             value: 'null',
@@ -249,7 +249,7 @@ export class CSRFDetector extends BaseDetector {
     return this.createResult(
       AttackType.CSRF,
       SecuritySeverity.HIGH,
-      0.95,
+      0.9,
       {
         field: 'origin',
         value: origin,
@@ -292,7 +292,7 @@ export class CSRFDetector extends BaseDetector {
       return this.createResult(
         AttackType.CSRF,
         SecuritySeverity.HIGH,
-        0.9,
+        0.85,
         {
           field: 'referer',
           value: refererOrigin,
@@ -311,7 +311,7 @@ export class CSRFDetector extends BaseDetector {
         return this.createResult(
           AttackType.CSRF,
           SecuritySeverity.LOW,
-          0.5,
+          0.4,
           {
             field: 'referer',
             value: referer.substring(0, 100),

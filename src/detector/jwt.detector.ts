@@ -187,7 +187,7 @@ export class JWTDetector extends BaseDetector {
         return this.createResult(
           AttackType.JWT_ATTACK,
           SecuritySeverity.CRITICAL,
-          baseConfidence ?? 0.99,
+          baseConfidence ?? 1.0,
           {
             field: location,
             value: `alg: ${alg}`,
@@ -206,7 +206,7 @@ export class JWTDetector extends BaseDetector {
         return this.createResult(
           AttackType.JWT_ATTACK,
           SecuritySeverity.CRITICAL,
-          baseConfidence ?? 0.95,
+          baseConfidence ?? 1.0,
           {
             field: location,
             value: `kid: ${this.sanitizeValue(kid)}`,
@@ -223,7 +223,7 @@ export class JWTDetector extends BaseDetector {
           return this.createResult(
             AttackType.JWT_ATTACK,
             SecuritySeverity.CRITICAL,
-            baseConfidence ?? 0.95,
+            baseConfidence ?? 1.0,
             {
               field: location,
               value: `kid: ${this.sanitizeValue(kid)}`,
@@ -239,7 +239,7 @@ export class JWTDetector extends BaseDetector {
         return this.createResult(
           AttackType.JWT_ATTACK,
           SecuritySeverity.HIGH,
-          baseConfidence ?? 0.85,
+          baseConfidence ?? 0.9,
           {
             field: location,
             value: `kid: ${this.sanitizeValue(kid)}`,
@@ -290,7 +290,7 @@ export class JWTDetector extends BaseDetector {
         return this.createResult(
           AttackType.JWT_ATTACK,
           SecuritySeverity.CRITICAL,
-          baseConfidence ?? 0.95,
+          baseConfidence ?? 1.0,
           {
             field: location,
             value: `${headerName}: ${this.sanitizeValue(url)}`,
@@ -306,7 +306,7 @@ export class JWTDetector extends BaseDetector {
       return this.createResult(
         AttackType.JWT_ATTACK,
         SecuritySeverity.CRITICAL,
-        baseConfidence ?? 0.99,
+        baseConfidence ?? 1.0,
         {
           field: location,
           value: `${headerName}: ${this.sanitizeValue(url)}`,

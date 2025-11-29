@@ -19,18 +19,27 @@ export interface NotifyHandlerOptions {
 }
 
 /**
- * NotifyHandler - Sends webhook notifications
+ * NotifyHandler - Sends webhook notifications (Slack, Discord, etc.)
  * 
  * @example
  * ```typescript
- * // Basic
- * pipeline.on('notify', new NotifyHandler({ webhookUrl: 'https://...' }));
+ * import { ActionType, NotifyHandler } from 'cloudflare-sentinel';
+ * 
+ * // Basic - Slack webhook
+ * pipeline.on(ActionType.NOTIFY, new NotifyHandler({
+ *   webhookUrl: env.SLACK_WEBHOOK,
+ * }));
  * 
  * // With timeout and retries
- * pipeline.on('notify', new NotifyHandler({
- *   webhookUrl: 'https://...',
+ * pipeline.on(ActionType.NOTIFY, new NotifyHandler({
+ *   webhookUrl: env.SLACK_WEBHOOK,
  *   timeout: 3000,
  *   retries: 2,
+ * }));
+ * 
+ * // Using environment variable name
+ * pipeline.on(ActionType.NOTIFY, new NotifyHandler({
+ *   webhookEnvKey: 'SLACK_WEBHOOK',
  * }));
  * ```
  */

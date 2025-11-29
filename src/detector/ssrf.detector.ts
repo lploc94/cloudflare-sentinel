@@ -62,30 +62,30 @@ const INTERNAL_IP_PATTERNS = [
 
 // Cloud metadata endpoints with confidence levels
 const CLOUD_METADATA_PATTERNS: CloudMetadataPattern[] = [
-  // AWS - very specific, almost certainly SSRF
-  { pattern: /169\.254\.169\.254/, description: 'AWS EC2 metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { pattern: /169\.254\.169\.253/, description: 'AWS ECS metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { pattern: /169\.254\.170\.2/, description: 'AWS ECS task metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  // AWS - definite SSRF
+  { pattern: /169\.254\.169\.254/, description: 'AWS EC2 metadata', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { pattern: /169\.254\.169\.253/, description: 'AWS ECS metadata', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { pattern: /169\.254\.170\.2/, description: 'AWS ECS task metadata', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
-  // GCP
-  { pattern: /metadata\.google\.internal/i, description: 'GCP metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { pattern: /169\.254\.169\.254.*computeMetadata/i, description: 'GCP compute metadata', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
+  // GCP - definite SSRF
+  { pattern: /metadata\.google\.internal/i, description: 'GCP metadata', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { pattern: /169\.254\.169\.254.*computeMetadata/i, description: 'GCP compute metadata', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
-  // Azure
-  { pattern: /169\.254\.169\.254.*metadata.*instance/i, description: 'Azure IMDS', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  // Azure - definite SSRF
+  { pattern: /169\.254\.169\.254.*metadata.*instance/i, description: 'Azure IMDS', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
-  // Digital Ocean
-  { pattern: /169\.254\.169\.254.*metadata.*droplet/i, description: 'DigitalOcean metadata', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  // Digital Ocean - definite SSRF
+  { pattern: /169\.254\.169\.254.*metadata.*droplet/i, description: 'DigitalOcean metadata', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
-  // Alibaba Cloud
-  { pattern: /100\.100\.100\.200/i, description: 'Alibaba Cloud metadata', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  // Alibaba Cloud - definite SSRF
+  { pattern: /100\.100\.100\.200/i, description: 'Alibaba Cloud metadata', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
-  // Oracle Cloud
-  { pattern: /169\.254\.169\.254.*opc/i, description: 'Oracle Cloud metadata', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  // Oracle Cloud - definite SSRF
+  { pattern: /169\.254\.169\.254.*opc/i, description: 'Oracle Cloud metadata', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
   // Kubernetes
-  { pattern: /kubernetes\.default\.svc/i, description: 'Kubernetes API server', confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { pattern: /kubernetes\.default/i, description: 'Kubernetes service', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { pattern: /kubernetes\.default\.svc/i, description: 'Kubernetes API server', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { pattern: /kubernetes\.default/i, description: 'Kubernetes service', confidence: 0.95, severity: SecuritySeverity.HIGH },
 ];
 
 // Dangerous URL schemes
@@ -102,13 +102,13 @@ const DANGEROUS_SCHEMES = [
 // SSRF bypass techniques with confidence levels
 // Lower confidence for patterns that could be legitimate
 const BYPASS_PATTERNS: SSRFBypassPattern[] = [
-  // DNS rebinding - very specific, high confidence
-  { pattern: /\.(xip|nip|sslip)\.io/i, description: 'DNS rebinding service', confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { pattern: /\.burpcollaborator\.net/i, description: 'Burp Collaborator', confidence: 0.98, severity: SecuritySeverity.HIGH },
-  { pattern: /\.oastify\.com/i, description: 'OAST service', confidence: 0.98, severity: SecuritySeverity.HIGH },
+  // DNS rebinding - definite attack tool
+  { pattern: /\.(xip|nip|sslip)\.io/i, description: 'DNS rebinding service', confidence: 1.0, severity: SecuritySeverity.HIGH },
+  { pattern: /\.burpcollaborator\.net/i, description: 'Burp Collaborator', confidence: 1.0, severity: SecuritySeverity.HIGH },
+  { pattern: /\.oastify\.com/i, description: 'OAST service', confidence: 1.0, severity: SecuritySeverity.HIGH },
   
   // Null byte - very suspicious
-  { pattern: /%00/i, description: 'Null byte injection', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  { pattern: /%00/i, description: 'Null byte injection', confidence: 0.95, severity: SecuritySeverity.HIGH },
   
   // IP address tricks - uncommon in legitimate traffic
   { pattern: /0x7f\d{6}/i, description: 'Hex localhost (0x7f...)', confidence: 0.9, severity: SecuritySeverity.HIGH },
@@ -226,13 +226,13 @@ export class SSRFDetector extends BaseDetector {
     const lowerValue = value.toLowerCase();
     const baseConfidence = this.config.baseConfidence;
     
-    // Check for dangerous URL schemes (highest priority)
+    // Check for dangerous URL schemes (highest priority) - definite attack
     for (const scheme of this.activeDangerousSchemes) {
       if (lowerValue.includes(scheme)) {
         return this.createResult(
           AttackType.SSRF,
           SecuritySeverity.CRITICAL,
-          baseConfidence ?? 0.95,
+          baseConfidence ?? 1.0,
           {
             field: location,
             value: value.substring(0, 200),
@@ -268,7 +268,7 @@ export class SSRFDetector extends BaseDetector {
       return this.createResult(
         AttackType.SSRF,
         SecuritySeverity.HIGH,
-        baseConfidence ?? 0.95,
+        baseConfidence ?? 1.0,
         {
           field: location,
           value: value.substring(0, 200),

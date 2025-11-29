@@ -198,12 +198,12 @@ export class HTTPSmugglingDetector extends BaseDetector {
     const contentLength = request.headers.get('content-length');
     const transferEncoding = request.headers.get('transfer-encoding');
 
-    // Both headers present - classic smuggling setup
+    // Both headers present - classic smuggling setup (definite attack)
     if (contentLength && transferEncoding) {
       return this.createResult(
         AttackType.HTTP_SMUGGLING,
         SecuritySeverity.CRITICAL,
-        baseConfidence ?? 0.95,
+        baseConfidence ?? 1.0,
         {
           field: 'headers',
           value: `CL: ${contentLength}, TE: ${transferEncoding}`,
@@ -244,7 +244,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
           return this.createResult(
             AttackType.HTTP_SMUGGLING,
             SecuritySeverity.CRITICAL,
-            baseConfidence ?? 0.98,
+            baseConfidence ?? 1.0,
             {
               field: `header.${headerName}`,
               value: this.sanitizeValue(value),
@@ -263,7 +263,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
           return this.createResult(
             AttackType.HTTP_SMUGGLING,
             SecuritySeverity.HIGH,
-            baseConfidence ?? 0.9,
+            baseConfidence ?? 0.95,
             {
               field: `header.${headerName}`,
               value: this.sanitizeValue(value),
@@ -296,7 +296,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
         return this.createResult(
           AttackType.HTTP_SMUGGLING,
           SecuritySeverity.HIGH,
-          baseConfidence ?? 0.9,
+          baseConfidence ?? 0.95,
           {
             field: 'header.content-length',
             value: contentLength,
@@ -346,12 +346,12 @@ export class HTTPSmugglingDetector extends BaseDetector {
         );
       }
 
-      // Check for multiple values (e.g., "5, 10")
+      // Check for multiple values (e.g., "5, 10") - definite attack
       if (contentLength.includes(',')) {
         return this.createResult(
           AttackType.HTTP_SMUGGLING,
           SecuritySeverity.CRITICAL,
-          baseConfidence ?? 0.95,
+          baseConfidence ?? 1.0,
           {
             field: 'header.content-length',
             value: contentLength,
@@ -387,7 +387,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
         return this.createResult(
           AttackType.HTTP_SMUGGLING,
           SecuritySeverity.HIGH,
-          baseConfidence ?? 0.85,
+          baseConfidence ?? 0.9,
           {
             field: 'header.transfer-encoding',
             value: transferEncoding,
@@ -405,7 +405,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
         return this.createResult(
           AttackType.HTTP_SMUGGLING,
           SecuritySeverity.MEDIUM,
-          baseConfidence ?? 0.7,
+          baseConfidence ?? 0.6,
           {
             field: 'header.transfer-encoding',
             value: transferEncoding,
@@ -423,7 +423,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
         return this.createResult(
           AttackType.HTTP_SMUGGLING,
           SecuritySeverity.MEDIUM,
-          baseConfidence ?? 0.75,
+          baseConfidence ?? 0.7,
           {
             field: 'header.transfer-encoding',
             value: transferEncoding,
@@ -468,7 +468,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
       return this.createResult(
         AttackType.HTTP_SMUGGLING,
         SecuritySeverity.HIGH,
-        baseConfidence ?? 0.85,
+        baseConfidence ?? 0.9,
         {
           field: `header.${override.name}`,
           value: override.value!,
@@ -536,7 +536,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
         return this.createResult(
           AttackType.HTTP_SMUGGLING,
           SecuritySeverity.MEDIUM,
-          baseConfidence ?? 0.8,
+          baseConfidence ?? 0.7,
           {
             field: 'header.host',
             value: this.sanitizeValue(host),
@@ -578,8 +578,8 @@ export class HTTPSmugglingDetector extends BaseDetector {
         if (pattern.test(xff)) {
           return this.createResult(
             AttackType.HTTP_SMUGGLING,
-            SecuritySeverity.MEDIUM,
-            baseConfidence ?? 0.7,
+            SecuritySeverity.LOW,
+            baseConfidence ?? 0.6,
             {
               field: 'header.x-forwarded-for',
               value: xff,
@@ -595,8 +595,8 @@ export class HTTPSmugglingDetector extends BaseDetector {
       if (ipCount > 10) {
         return this.createResult(
           AttackType.HTTP_SMUGGLING,
-          SecuritySeverity.MEDIUM,
-          baseConfidence ?? 0.6,
+          SecuritySeverity.LOW,
+          baseConfidence ?? 0.5,
           {
             field: 'header.x-forwarded-for',
             value: this.sanitizeValue(xff),
@@ -615,7 +615,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
         return this.createResult(
           AttackType.HTTP_SMUGGLING,
           SecuritySeverity.MEDIUM,
-          baseConfidence ?? 0.75,
+          baseConfidence ?? 0.7,
           {
             field: 'header.x-forwarded-proto',
             value: xfp,
@@ -633,7 +633,7 @@ export class HTTPSmugglingDetector extends BaseDetector {
         return this.createResult(
           AttackType.HTTP_SMUGGLING,
           SecuritySeverity.MEDIUM,
-          baseConfidence ?? 0.75,
+          baseConfidence ?? 0.7,
           {
             field: 'header.x-forwarded-port',
             value: xfPort,

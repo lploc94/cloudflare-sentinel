@@ -59,7 +59,7 @@ export class XSSResponseDetector extends BaseDetector {
           return this.createResult(
             AttackType.XSS,
             SecuritySeverity.CRITICAL,
-            0.95,
+            1.0,
             {
               field: `reflected_param.${key}`,
               value: this.sanitizeValue(value),

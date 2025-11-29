@@ -47,28 +47,28 @@ export interface SQLInjectionRequestDetectorConfig extends BaseDetectorOptions {
 // - 0.70-0.84: Suspicious (could be legitimate in some contexts)
 // - 0.50-0.69: Low confidence (high false positive risk)
 const SQL_INJECTION_PATTERNS: SQLInjectionPattern[] = [
-  // === CRITICAL - Destructive operations (very specific, almost never legitimate) ===
-  { regex: /;\s*DROP\s+(TABLE|DATABASE|INDEX|VIEW)\s+/i, description: 'DROP statement', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { regex: /;\s*TRUNCATE\s+TABLE\s+/i, description: 'TRUNCATE statement', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { regex: /INTO\s+(OUT|DUMP)FILE\s+['"]/i, description: 'File write attempt', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { regex: /LOAD_FILE\s*\(\s*['"]/i, description: 'File read attempt', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
+  // === CRITICAL - Destructive operations (definite attack) ===
+  { regex: /;\s*DROP\s+(TABLE|DATABASE|INDEX|VIEW)\s+/i, description: 'DROP statement', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /;\s*TRUNCATE\s+TABLE\s+/i, description: 'TRUNCATE statement', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /INTO\s+(OUT|DUMP)FILE\s+['"]/i, description: 'File write attempt', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /LOAD_FILE\s*\(\s*['"]/i, description: 'File read attempt', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
   
-  // === CRITICAL - UNION-based injection (very specific) ===
-  { regex: /UNION\s+(ALL\s+)?SELECT\s+NULL/i, description: 'UNION SELECT NULL (column probing)', confidence: 0.99, severity: SecuritySeverity.CRITICAL },
-  { regex: /UNION\s+(ALL\s+)?SELECT\s+\d+\s*,/i, description: 'UNION SELECT with numbers', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
-  { regex: /UNION\s+(ALL\s+)?SELECT\s+/i, description: 'UNION SELECT injection', confidence: 0.95, severity: SecuritySeverity.CRITICAL },
+  // === CRITICAL - UNION-based injection (definite attack) ===
+  { regex: /UNION\s+(ALL\s+)?SELECT\s+NULL/i, description: 'UNION SELECT NULL (column probing)', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /UNION\s+(ALL\s+)?SELECT\s+\d+\s*,/i, description: 'UNION SELECT with numbers', confidence: 1.0, severity: SecuritySeverity.CRITICAL },
+  { regex: /UNION\s+(ALL\s+)?SELECT\s+/i, description: 'UNION SELECT injection', confidence: 0.98, severity: SecuritySeverity.CRITICAL },
   
   // === HIGH - Classic SQL injection (specific patterns) ===
-  { regex: /'\s*OR\s+['"]?1['"]?\s*=\s*['"]?1/i, description: "OR 1=1 injection", confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { regex: /'\s*OR\s+['"]['"]?\s*=\s*['"]/i, description: "OR ''='' injection", confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { regex: /'\s*OR\s+['"]?true['"]?\s*=\s*['"]?true/i, description: "OR true=true injection", confidence: 0.93, severity: SecuritySeverity.HIGH },
+  { regex: /'\s*OR\s+['"]?1['"]?\s*=\s*['"]?1/i, description: "OR 1=1 injection", confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { regex: /'\s*OR\s+['"]['"]?\s*=\s*['"]/i, description: "OR ''='' injection", confidence: 0.98, severity: SecuritySeverity.HIGH },
+  { regex: /'\s*OR\s+['"]?true['"]?\s*=\s*['"]?true/i, description: "OR true=true injection", confidence: 0.95, severity: SecuritySeverity.HIGH },
   { regex: /'\s*AND\s+['"]?1['"]?\s*=\s*['"]?2/i, description: "AND 1=2 (false) injection", confidence: 0.9, severity: SecuritySeverity.HIGH },
   
-  // === HIGH - Time-based blind injection (very specific) ===
-  { regex: /SLEEP\s*\(\s*\d+\s*\)/i, description: 'SLEEP(n) blind injection', confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { regex: /WAITFOR\s+DELAY\s+['"]0:/i, description: 'WAITFOR DELAY (MSSQL)', confidence: 0.98, severity: SecuritySeverity.HIGH },
-  { regex: /pg_sleep\s*\(\s*\d/i, description: 'pg_sleep() (PostgreSQL)', confidence: 0.95, severity: SecuritySeverity.HIGH },
-  { regex: /BENCHMARK\s*\(\s*\d{4,}/i, description: 'BENCHMARK with large iterations', confidence: 0.9, severity: SecuritySeverity.HIGH },
+  // === HIGH - Time-based blind injection (definite attack) ===
+  { regex: /SLEEP\s*\(\s*\d+\s*\)/i, description: 'SLEEP(n) blind injection', confidence: 1.0, severity: SecuritySeverity.HIGH },
+  { regex: /WAITFOR\s+DELAY\s+['"]0:/i, description: 'WAITFOR DELAY (MSSQL)', confidence: 1.0, severity: SecuritySeverity.HIGH },
+  { regex: /pg_sleep\s*\(\s*\d/i, description: 'pg_sleep() (PostgreSQL)', confidence: 1.0, severity: SecuritySeverity.HIGH },
+  { regex: /BENCHMARK\s*\(\s*\d{4,}/i, description: 'BENCHMARK with large iterations', confidence: 0.95, severity: SecuritySeverity.HIGH },
   
   // === HIGH - Stacked queries (DML operations are more suspicious) ===
   { regex: /;\s*(UPDATE|DELETE)\s+\w+\s+(SET|WHERE)/i, description: 'Stacked UPDATE/DELETE', confidence: 0.92, severity: SecuritySeverity.HIGH },
@@ -77,9 +77,9 @@ const SQL_INJECTION_PATTERNS: SQLInjectionPattern[] = [
   { regex: /;\s*SELECT\s+.*\s+FROM\s+/i, description: 'Stacked SELECT with FROM', confidence: 0.8, severity: SecuritySeverity.MEDIUM },
   
   // === HIGH - Schema/data extraction ===
-  { regex: /information_schema\.(tables|columns|schemata)/i, description: 'Schema enumeration', confidence: 0.92, severity: SecuritySeverity.HIGH },
-  { regex: /sys\.(databases|objects|columns)/i, description: 'MSSQL system table access', confidence: 0.9, severity: SecuritySeverity.HIGH },
-  { regex: /mysql\.(user|db)/i, description: 'MySQL privilege tables', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /information_schema\.(tables|columns|schemata)/i, description: 'Schema enumeration', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /sys\.(databases|objects|columns)/i, description: 'MSSQL system table access', confidence: 0.95, severity: SecuritySeverity.HIGH },
+  { regex: /mysql\.(user|db)/i, description: 'MySQL privilege tables', confidence: 0.98, severity: SecuritySeverity.HIGH },
   
   // === MEDIUM - Boolean-based blind ===
   { regex: /'\s*AND\s+\d+\s*=\s*\d+/i, description: 'Boolean blind (AND n=n)', confidence: 0.8, severity: SecuritySeverity.MEDIUM },

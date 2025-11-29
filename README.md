@@ -26,29 +26,32 @@ npm install cloudflare-sentinel
 import { 
   SentinelPipeline,
   BlocklistDetector,
+  ReputationDetector,
   RateLimitDetector,
   SQLInjectionRequestDetector,
   MaxScoreAggregator,
   MultiLevelResolver,
   LogHandler,
+  ActionType,
 } from 'cloudflare-sentinel';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const pipeline = SentinelPipeline.sync([
       new BlocklistDetector({ kv: env.BLOCKLIST_KV }),
+      new ReputationDetector({ kv: env.REPUTATION_KV }),
       new RateLimitDetector({ kv: env.RATE_LIMIT_KV, limit: 100, windowSeconds: 60 }),
       new SQLInjectionRequestDetector(),
     ])
       .score(new MaxScoreAggregator())
       .resolve(new MultiLevelResolver({
         levels: [
-          { maxScore: 30, actions: ['log'] },
-          { maxScore: 60, actions: ['log', 'warn'] },
-          { maxScore: 100, actions: ['block', 'notify'] },
+          { maxScore: 30, actions: [ActionType.LOG] },
+          { maxScore: 60, actions: [ActionType.LOG, ActionType.UPDATE_REPUTATION] },
+          { maxScore: 100, actions: [ActionType.BLOCK, ActionType.NOTIFY] },
         ],
       }))
-      .on('log', new LogHandler({ console: true }));
+      .on(ActionType.LOG, new LogHandler({ console: true }));
 
     const decision = await pipeline.process(request, { env, ctx });
     
@@ -97,10 +100,11 @@ export default {
 - `MultiLevelResolver` - Configurable cascading actions
 
 ### Handlers
-- `LogHandler` - Console/analytics logging
-- `NotifyHandler` - Webhook notifications
+- `LogHandler` - Console logging
+- `NotifyHandler` - Webhook notifications (Slack, Discord, etc.)
 - `BlocklistHandler` - Add to KV blocklist
 - `ReputationHandler` - Update IP reputation score
+- `AnalyticsHandler` - Cloudflare Analytics Engine logging
 
 ## 🤖 ML Detector
 
@@ -144,7 +148,7 @@ npm install
 # Create KV namespaces
 wrangler kv:namespace create BLOCKLIST_KV
 wrangler kv:namespace create RATE_LIMIT_KV
-wrangler kv:namespace create ESCALATION_KV
+wrangler kv:namespace create REPUTATION_KV
 
 # Configure wrangler.toml + sentinel.config.ts
 # Deploy

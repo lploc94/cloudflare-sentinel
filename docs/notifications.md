@@ -7,17 +7,17 @@ Send alerts when attacks are detected.
 Use `NotifyHandler` with Slack webhook:
 
 ```typescript
-import { SentinelPipeline, NotifyHandler } from 'cloudflare-sentinel';
+import { SentinelPipeline, NotifyHandler, ActionType } from 'cloudflare-sentinel';
 
 const pipeline = SentinelPipeline.sync([...])
   .score(new MaxScoreAggregator())
   .resolve(new MultiLevelResolver({
     levels: [
-      { maxScore: 60, actions: ['log'] },
-      { maxScore: 100, actions: ['block', 'notify'] },  // notify on high score
+      { maxScore: 60, actions: [ActionType.LOG] },
+      { maxScore: 100, actions: [ActionType.BLOCK, ActionType.NOTIFY] },  // notify on high score
     ],
   }))
-  .on('notify', new NotifyHandler({
+  .on(ActionType.NOTIFY, new NotifyHandler({
     webhookUrl: env.SLACK_WEBHOOK,
   }));
 ```
@@ -39,11 +39,13 @@ wrangler secret put SLACK_WEBHOOK
 Configure when to send notifications using `MultiLevelResolver`:
 
 ```typescript
+import { ActionType } from 'cloudflare-sentinel';
+
 new MultiLevelResolver({
   levels: [
-    { maxScore: 30, actions: ['increment'] },           // Low: silent
-    { maxScore: 60, actions: ['log'] },                 // Medium: log only
-    { maxScore: 100, actions: ['block', 'notify'] },    // High: block + alert
+    { maxScore: 30, actions: [ActionType.LOG] },                          // Low: log only
+    { maxScore: 60, actions: [ActionType.LOG, ActionType.UPDATE_REPUTATION] },  // Medium: track reputation
+    { maxScore: 100, actions: [ActionType.BLOCK, ActionType.NOTIFY] },    // High: block + alert
   ],
 })
 ```
@@ -53,11 +55,9 @@ new MultiLevelResolver({
 Create a custom handler for other services:
 
 ```typescript
-import type { Action, HandlerContext } from 'cloudflare-sentinel';
+import type { Action, HandlerContext, IActionHandler } from 'cloudflare-sentinel';
 
 class EmailHandler implements IActionHandler {
-  type = 'notify';
-
   constructor(private config: { apiKey: string; to: string }) {}
 
   async execute(action: Action, ctx: HandlerContext): Promise<void> {
@@ -78,7 +78,7 @@ class EmailHandler implements IActionHandler {
 }
 
 // Register
-pipeline.on('notify', new EmailHandler({
+pipeline.on(ActionType.NOTIFY, new EmailHandler({
   apiKey: env.RESEND_API_KEY,
   to: 'admin@yourdomain.com',
 }));

@@ -55,25 +55,25 @@ const DEFAULT_REDIRECT_PARAMS = [
 
 // Dangerous patterns in redirect URLs
 const DANGEROUS_PATTERNS = [
-  // JavaScript protocol - XSS via redirect
-  { pattern: /^javascript:/i, description: 'JavaScript protocol', severity: SecuritySeverity.CRITICAL, confidence: 0.99 },
-  { pattern: /^vbscript:/i, description: 'VBScript protocol', severity: SecuritySeverity.CRITICAL, confidence: 0.99 },
+  // JavaScript protocol - XSS via redirect (definite attack)
+  { pattern: /^javascript:/i, description: 'JavaScript protocol', severity: SecuritySeverity.CRITICAL, confidence: 1.0 },
+  { pattern: /^vbscript:/i, description: 'VBScript protocol', severity: SecuritySeverity.CRITICAL, confidence: 1.0 },
   
   // Data URL - potential XSS
-  { pattern: /^data:/i, description: 'Data URL', severity: SecuritySeverity.HIGH, confidence: 0.9 },
+  { pattern: /^data:/i, description: 'Data URL', severity: SecuritySeverity.HIGH, confidence: 0.95 },
   
   // Protocol-relative URL (//evil.com)
-  { pattern: /^\/\/[^/]/, description: 'Protocol-relative URL', severity: SecuritySeverity.HIGH, confidence: 0.85 },
+  { pattern: /^\/\/[^/]/, description: 'Protocol-relative URL', severity: SecuritySeverity.HIGH, confidence: 0.9 },
   
   // Backslash tricks (browser normalization)
-  { pattern: /^\/\\/, description: 'Backslash URL trick', severity: SecuritySeverity.HIGH, confidence: 0.9 },
-  { pattern: /^\\\\/, description: 'Double backslash', severity: SecuritySeverity.HIGH, confidence: 0.9 },
+  { pattern: /^\/\\/, description: 'Backslash URL trick', severity: SecuritySeverity.HIGH, confidence: 0.95 },
+  { pattern: /^\\\\/, description: 'Double backslash', severity: SecuritySeverity.HIGH, confidence: 0.95 },
   
   // URL with credentials (user:pass@evil.com)
-  { pattern: /@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/, description: 'URL with @ (credential trick)', severity: SecuritySeverity.HIGH, confidence: 0.85 },
+  { pattern: /@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/, description: 'URL with @ (credential trick)', severity: SecuritySeverity.HIGH, confidence: 0.9 },
   
   // Null byte injection
-  { pattern: /%00/, description: 'Null byte injection', severity: SecuritySeverity.HIGH, confidence: 0.9 },
+  { pattern: /%00/, description: 'Null byte injection', severity: SecuritySeverity.HIGH, confidence: 0.95 },
   
   // Tab/newline injection
   { pattern: /%09|%0a|%0d/i, description: 'Tab/newline injection', severity: SecuritySeverity.MEDIUM, confidence: 0.8 },

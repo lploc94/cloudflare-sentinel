@@ -15,6 +15,7 @@ import {
   // Security Detectors
   BlocklistDetector,
   RateLimitDetector,
+  ReputationDetector,
   
   // Attack Detectors
   SQLInjectionRequestDetector,
@@ -30,6 +31,9 @@ import {
   SQLInjectionResponseDetector,
   XSSResponseDetector,
   PathTraversalResponseDetector,
+  
+  // Action Types
+  ActionType,
 } from 'cloudflare-sentinel';
 
 import type { Env } from './lib/types';
@@ -41,30 +45,23 @@ import type { Env } from './lib/types';
 
 /** Standard thresholds for most routes */
 const STANDARD = [
-  { maxScore: 30, actions: ['log'] },
-  { maxScore: 60, actions: ['log', 'notify'] },
-  { maxScore: 100, actions: ['block', 'notify'] },
+  { maxScore: 30, actions: [ActionType.LOG] },
+  { maxScore: 60, actions: [ActionType.LOG, ActionType.UPDATE_REPUTATION] },
+  { maxScore: 100, actions: [ActionType.BLOCK, ActionType.UPDATE_REPUTATION, ActionType.NOTIFY] },
 ];
 
 /** Strict thresholds for sensitive routes (auth, admin) */
 const STRICT = [
-  { maxScore: 20, actions: ['log'] },
-  { maxScore: 40, actions: ['log', 'notify'] },
-  { maxScore: 100, actions: ['block', 'notify'] },
+  { maxScore: 20, actions: [ActionType.LOG] },
+  { maxScore: 40, actions: [ActionType.LOG, ActionType.UPDATE_REPUTATION] },
+  { maxScore: 100, actions: [ActionType.BLOCK, ActionType.UPDATE_REPUTATION, ActionType.NOTIFY] },
 ];
 
 /** Relaxed thresholds for public routes */
 const RELAXED = [
-  { maxScore: 50, actions: ['log'] },
-  { maxScore: 80, actions: ['log', 'notify'] },
-  { maxScore: 100, actions: ['block'] },
-];
-
-/** Custom example - aggressive escalation */
-const AGGRESSIVE = [
-  { maxScore: 10, actions: ['log'] },
-  { maxScore: 30, actions: ['log', 'notify'] },
-  { maxScore: 50, actions: ['block', 'notify'] },
+  { maxScore: 50, actions: [ActionType.LOG] },
+  { maxScore: 80, actions: [ActionType.LOG, ActionType.UPDATE_REPUTATION] },
+  { maxScore: 100, actions: [ActionType.BLOCK, ActionType.UPDATE_REPUTATION] },
 ];
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -77,7 +74,11 @@ export function createConfig(env: Env) {
   // ────────────────────────────────────────────────────────────────────────────
   
   const basic = [
+    // Access control (high priority - run first)
     new BlocklistDetector({ kv: env.BLOCKLIST_KV }),
+    new ReputationDetector({ kv: env.REPUTATION_KV }),
+    
+    // Attack detectors
     new SQLInjectionRequestDetector(),
     new XSSRequestDetector(),
     new PathTraversalRequestDetector(),
