@@ -25,6 +25,11 @@
  * // With custom trained model
  * new MLDetector({ model: customModelWeights })
  * 
+ * // Exclude token fields from analysis (avoid false positives)
+ * new MLDetector({
+ *   excludeFields: ['token', 'google_token', 'refresh_token', 'access_token'],
+ * })
+ * 
  * // Async monitoring pipeline (recommended)
  * const mlPipeline = createMLMonitoringPipeline({ kv, system });
  * ctx.waitUntil(mlPipeline.process(request, pctx));
@@ -59,16 +64,20 @@ import defaultModel from '../ml/models/classifier.json';
 export interface MLDetectorOptions {
   /** Custom model weights (default: bundled model) */
   model?: ModelWeights;
+  /** Fields to exclude from analysis (e.g., ['token', 'google_token', 'refresh_token']) */
+  excludeFields?: string[];
 }
 
 export class MLDetector extends BaseDetector {
   name = 'ml';
   phase: 'request' | 'response' | 'both' = 'both'; // Support async monitoring
   private classifier: LinearClassifier;
+  private excludeFields: Set<string>;
 
   constructor(options: MLDetectorOptions = {}) {
     super();
     this.classifier = new LinearClassifier(options.model ?? defaultModel as ModelWeights);
+    this.excludeFields = new Set(options.excludeFields ?? ['token', 'access_token', 'refresh_token', 'google_token', 'id_token', 'jwt', 'password', 'secret']);
   }
 
   /**
@@ -121,10 +130,33 @@ export class MLDetector extends BaseDetector {
     if (url.search) parts.push(url.search);
     
     if (body) {
-      const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
-      parts.push(bodyStr.slice(0, 1000));
+      // Filter out excluded fields from body
+      const filteredBody = this.filterBody(body);
+      if (filteredBody) {
+        const bodyStr = typeof filteredBody === 'string' ? filteredBody : JSON.stringify(filteredBody);
+        parts.push(bodyStr.slice(0, 1000));
+      }
     }
     
     return parts.join(' ');
+  }
+
+  /**
+   * Filter out excluded fields from body
+   */
+  private filterBody(body: any): any {
+    if (!body || this.excludeFields.size === 0) return body;
+    if (typeof body === 'string') return body;
+    if (typeof body !== 'object') return body;
+    
+    const filtered: Record<string, any> = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (!this.excludeFields.has(key)) {
+        filtered[key] = value;
+      }
+    }
+    
+    // Return null if all fields were excluded
+    return Object.keys(filtered).length > 0 ? filtered : null;
   }
 }

@@ -152,7 +152,7 @@ export class XSSRequestDetector extends BaseDetector {
     this.config = config;
     this.activePatterns = config.patterns ?? XSS_PATTERNS;
     this.excludeFields = new Set(
-      (config.excludeFields ?? []).map(f => f.toLowerCase())
+      (config.excludeFields ?? ['token', 'access_token', 'refresh_token', 'google_token', 'id_token', 'jwt', 'password', 'secret']).map(f => f.toLowerCase())
     );
     this.checkHeaders = config.checkHeaders ?? DEFAULT_CHECK_HEADERS;
   }

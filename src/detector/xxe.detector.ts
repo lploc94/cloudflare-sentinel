@@ -276,7 +276,7 @@ export class XXEDetector extends BaseDetector {
       config.contentTypes?.filter(t => t !== '*') ?? XML_CONTENT_TYPES
     );
     this.excludeFields = new Set(
-      (config.excludeFields ?? []).map(f => f.toLowerCase())
+      (config.excludeFields ?? ['token', 'access_token', 'refresh_token', 'google_token', 'id_token', 'jwt', 'password', 'secret']).map(f => f.toLowerCase())
     );
   }
 

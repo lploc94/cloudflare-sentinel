@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2025-11-29
+
+### Added
+- **MLDetector `excludeFields` option** - Exclude token fields from ML analysis to avoid false positives
+  - Example: `excludeFields: ['token', 'google_token', 'refresh_token']`
+
+### Changed
+- **Default `excludeFields` for all body-analyzing detectors**
+  - Added token-related defaults: `['token', 'access_token', 'refresh_token', 'google_token', 'id_token', 'jwt', 'password', 'secret']`
+  - Affected detectors: SQLInjectionRequestDetector, XSSRequestDetector, SSTIDetector, SSRFDetector, XXEDetector, MLDetector
+  - Reduces false positives when scanning JSON APIs with token-based authentication
+
 ## [2.1.1] - 2025-11-29
 
 ### Fixed

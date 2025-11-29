@@ -172,7 +172,7 @@ export class SSRFDetector extends BaseDetector {
     this.config = config;
     
     this.excludeFields = new Set(
-      (config.excludeFields ?? []).map(f => f.toLowerCase())
+      (config.excludeFields ?? ['token', 'access_token', 'refresh_token', 'google_token', 'id_token', 'jwt', 'password', 'secret']).map(f => f.toLowerCase())
     );
     this.activeCloudPatterns = config.cloudMetadataPatterns ?? CLOUD_METADATA_PATTERNS;
     this.activeBypassPatterns = config.bypassPatterns ?? BYPASS_PATTERNS;
