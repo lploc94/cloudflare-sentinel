@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2025-11-29
+
+### Fixed
+- **Package exports** - Fixed outdated exports in package.json
+  - Removed non-existent `./middleware` and `./logger` exports
+  - Added new subpath exports: `./pipeline`, `./scoring`, `./resolver`, `./handler`, `./ml`, `./utils`
+- **Clean build** - Removed legacy folders from dist/
+
 ## [2.1.0] - 2025-11-29
 
 ### Added

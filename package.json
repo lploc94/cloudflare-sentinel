@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-sentinel",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Attack detection and rate limiting middleware for Cloudflare Workers - Pluggable detector system with layered rate limiting",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,21 +12,37 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./middleware": {
-      "types": "./dist/middleware/index.d.ts",
-      "default": "./dist/middleware/index.js"
-    },
     "./detector": {
       "types": "./dist/detector/index.d.ts",
       "default": "./dist/detector/index.js"
     },
-    "./logger": {
-      "types": "./dist/logger/index.d.ts",
-      "default": "./dist/logger/index.js"
+    "./pipeline": {
+      "types": "./dist/pipeline/index.d.ts",
+      "default": "./dist/pipeline/index.js"
+    },
+    "./scoring": {
+      "types": "./dist/scoring/index.d.ts",
+      "default": "./dist/scoring/index.js"
+    },
+    "./resolver": {
+      "types": "./dist/resolver/index.d.ts",
+      "default": "./dist/resolver/index.js"
+    },
+    "./handler": {
+      "types": "./dist/handler/index.d.ts",
+      "default": "./dist/handler/index.js"
+    },
+    "./ml": {
+      "types": "./dist/ml/index.d.ts",
+      "default": "./dist/ml/index.js"
     },
     "./types": {
       "types": "./dist/types/index.d.ts",
       "default": "./dist/types/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "default": "./dist/utils/index.js"
     }
   },
   "scripts": {
