@@ -25,8 +25,11 @@ pip install -r requirements.txt
 # 1. Get attack payloads
 python3 download_datasets.py
 
-# 2. Generate safe requests (customize later)
-python3 generate_safe_requests.py --count 50000
+# 2. Generate DIVERSE safe data (recommended - prevents overfitting!)
+python3 download_safe_data.py
+
+# Or: Generate basic safe requests (customize later)
+# python3 generate_safe_requests.py --count 50000
 
 # 3. Prepare dataset
 python3 prepare_dataset.py
@@ -34,6 +37,8 @@ python3 prepare_dataset.py
 # 4. Train model
 python3 train_classifier.py --data data/dataset.jsonl --output ../../models/classifier.json
 ```
+
+> ⚠️ **Avoiding Overfitting:** Use `download_safe_data.py` to generate diverse safe data including real dictionary words, names, cities, and realistic patterns. This prevents the model from overfitting on limited safe examples.
 
 ---
 
@@ -299,14 +304,60 @@ scripts/training/
 ├── data/
 │   ├── samples/
 │   │   ├── safe.txt           # YOUR safe patterns
+│   │   ├── safe_diverse.txt   # Diverse safe data (from download_safe_data.py)
 │   │   └── suspicious.txt     # Attack payloads
 │   └── dataset.jsonl          # Combined (auto-generated)
 ├── download_datasets.py       # Download PayloadsAllTheThings
-├── generate_safe_requests.py  # Generate safe requests (EDIT THIS!)
+├── download_safe_data.py      # Download diverse safe data (NEW - recommended!)
+├── generate_safe_requests.py  # Generate basic safe requests
 ├── prepare_dataset.py         # Combine → dataset.jsonl
 ├── train_classifier.py        # Train model
 ├── verify_hash.py             # Verify hash compatibility
 └── requirements.txt
+```
+
+---
+
+## Diverse Safe Data (Recommended)
+
+The `download_safe_data.py` script generates diverse, realistic safe data to prevent ML overfitting:
+
+### Data Sources
+
+| Source | Count | Description |
+|--------|-------|-------------|
+| English dictionary | ~10,000 | Common words |
+| Names (First/Last) | ~5,000 | Real names from multiple cultures |
+| Cities | ~3,000 | World cities |
+| Emails | 5,000 | Realistic email formats |
+| Phone numbers | 3,000 | Various formats |
+| Addresses | 3,000 | Street addresses |
+| Sentences | 10,000 | Lorem ipsum + realistic |
+| File paths | 3,000 | Common file paths |
+| URLs | 3,000 | Safe URLs |
+| JSON objects | 2,000 | API responses |
+| Messages | 5,000 | User messages |
+| Product names | 2,000 | E-commerce products |
+
+### Usage
+
+```bash
+python3 download_safe_data.py
+# Output: data/samples/safe_diverse.txt (~47,000 samples)
+```
+
+### Why This Matters
+
+Without diverse safe data, ML models overfit:
+
+```
+❌ Limited safe data:
+   "Hello World", "Test User", "user@test.com"
+   → Model thinks ANY real text is suspicious!
+
+✅ Diverse safe data:
+   Dictionary words, real names, cities, realistic messages
+   → Model learns what NORMAL data looks like
 ```
 
 ---
