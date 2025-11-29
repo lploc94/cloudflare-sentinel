@@ -48,4 +48,14 @@ export abstract class BaseActionResolver implements IActionResolver {
       data: { channel, message, ...data },
     };
   }
+
+  /**
+   * Create update reputation action
+   */
+  protected updateReputation(delta: number, data?: any): Action {
+    return {
+      type: ActionType.UPDATE_REPUTATION,
+      data: { delta, ...data },
+    };
+  }
 }

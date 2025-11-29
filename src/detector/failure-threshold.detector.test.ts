@@ -204,11 +204,10 @@ describe('FailureThresholdDetector', () => {
   });
 
   describe('Confidence calculation', () => {
-    it('should increase confidence with count', async () => {
+    it('should use baseConfidence (default 1.0) - failure count is exact', async () => {
       const detector = new FailureThresholdDetector({
         kv,
         threshold: 2,
-        baseConfidence: 0.5,
         failureStatuses: [401],
       });
 
@@ -217,33 +216,30 @@ describe('FailureThresholdDetector', () => {
 
       await detector.detectResponse(request, response, {});
       let result = await detector.detectResponse(request, response, {}); // count=2
-      expect(result?.confidence).toBe(0.5); // base confidence at threshold
+      expect(result?.confidence).toBe(1.0); // default baseConfidence
 
       result = await detector.detectResponse(request, response, {}); // count=3
-      expect(result?.confidence).toBe(0.6); // +0.1
+      expect(result?.confidence).toBe(1.0); // stays at baseConfidence
 
       result = await detector.detectResponse(request, response, {}); // count=4
-      expect(result?.confidence).toBe(0.7); // +0.1
+      expect(result?.confidence).toBe(1.0); // stays at baseConfidence
     });
 
-    it('should cap confidence at 1.0', async () => {
+    it('should use custom baseConfidence if provided', async () => {
       const detector = new FailureThresholdDetector({
         kv,
-        threshold: 1,
-        baseConfidence: 0.9,
+        threshold: 2,
+        baseConfidence: 0.8,
         failureStatuses: [401],
       });
 
       const request = createRequest('1.2.3.4');
       const response = createResponse(401);
 
-      // Many failures
-      for (let i = 0; i < 10; i++) {
-        await detector.detectResponse(request, response, {});
-      }
+      await detector.detectResponse(request, response, {});
       const result = await detector.detectResponse(request, response, {});
 
-      expect(result?.confidence).toBeLessThanOrEqual(1.0);
+      expect(result?.confidence).toBe(0.8);
     });
   });
 

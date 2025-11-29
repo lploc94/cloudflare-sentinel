@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2025-11-29
+
+### Changed
+- **Detector Confidence = 1.0** - All fact-based detectors now use confidence = 1.0
+  - `FailureThresholdDetector`: baseConfidence changed from 0.5 to 1.0 (failure count is exact, not a guess)
+  - `ReputationDetector`: confidence changed from 0.95/0.6 to 1.0 (reputation score is calculated fact)
+  - This affects score calculation: score = severity × confidence (now severity × 1.0)
+
+### Added
+- **MultiLevelResolver UPDATE_REPUTATION support** - Can now include `ActionType.UPDATE_REPUTATION` in level actions
+- **BaseActionResolver.updateReputation()** - New helper method for creating update_reputation actions
+
+### Fixed
+- `FailureThresholdDetector` test cases updated to reflect confidence = 1.0 behavior
+
+## [2.0.0] - 2025-11-28
+
 ### Added
 - **Pipeline Architecture** - New `SentinelPipeline` class with composable stages
   - `SentinelPipeline.sync()` - Returns Decision, user controls response

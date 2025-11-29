@@ -83,14 +83,19 @@ export class MultiLevelResolver extends BaseActionResolver {
           }));
           break;
           
-        // TODO: ESCALATE - async AI pipeline (not yet implemented)
-          
         case ActionType.NOTIFY:
           actions.push(this.notify('multi-level', `Score ${score.score} at level ${matchedLevelIndex + 1}`));
           break;
           
         case ActionType.BLOCK:
           actions.push(this.block(`Blocked at level ${matchedLevelIndex + 1} (score: ${score.score})`));
+          break;
+          
+        case ActionType.UPDATE_REPUTATION:
+          actions.push(this.updateReputation(-10 * (matchedLevelIndex + 1), {
+            reason: `Multi-level detection at level ${matchedLevelIndex + 1}`,
+            score: score.score,
+          }));
           break;
           
         case ActionType.PROCEED:

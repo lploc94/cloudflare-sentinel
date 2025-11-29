@@ -106,8 +106,8 @@ export class FailureThresholdDetector extends BaseDetector {
     this.keyPrefix = options.keyPrefix ?? 'failure';
     this.failureStatuses = options.failureStatuses ?? [...FailureStatusPresets.AUTH];
     this.attackType = options.attackType ?? AttackType.SUSPICIOUS_PATTERN;
-    // Start at 0.5 when threshold just reached, increase with more failures
-    this.baseConfidence = options.baseConfidence ?? 0.5;
+    // Confidence is 1.0 by default - failure count is a fact, not a guess
+    this.baseConfidence = options.baseConfidence ?? 1.0;
   }
 
   async detectResponse(
@@ -130,7 +130,8 @@ export class FailureThresholdDetector extends BaseDetector {
       const count = await this.incrementFailCount(ip);
 
       if (count >= this.threshold) {
-        const confidence = Math.min(this.baseConfidence + (count - this.threshold) * 0.1, 1.0);
+        // Confidence is always baseConfidence (default 1.0) - failure count is exact
+        const confidence = this.baseConfidence;
 
         return this.createResult(
           this.attackType,

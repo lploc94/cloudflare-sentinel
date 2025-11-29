@@ -93,7 +93,7 @@ export class ReputationDetector extends BaseDetector {
         return this.createResult(
           AttackType.SUSPICIOUS_PATTERN,
           SecuritySeverity.CRITICAL,
-          0.95,
+          1.0, // Reputation score is a calculated fact, not a guess
           {
             field: 'ip',
             value: ip,
@@ -117,7 +117,7 @@ export class ReputationDetector extends BaseDetector {
         return this.createResult(
           AttackType.SUSPICIOUS_PATTERN,
           SecuritySeverity.MEDIUM,
-          0.6,
+          1.0, // Reputation score is a calculated fact, not a guess
           {
             field: 'ip',
             value: ip,
