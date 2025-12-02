@@ -7,8 +7,8 @@ Guide for contributors working on detectors.
 ```
 BaseDetector (abstract)
     ↓
-Built-in Detectors (22 detectors)
-    ├─ Access Control: BlocklistDetector, RateLimitDetector, ReputationDetector
+Built-in Detectors (23 detectors)
+    ├─ Access Control: BlocklistDetector, CuckooBlocklistDetector, RateLimitDetector, ReputationDetector
     ├─ Injection: SQLInjection, XSS, NoSQL, CommandInjection, SSTI
     ├─ Protocol: CSRF, XXE, HTTPSmuggling, JWT
     ├─ Redirect: OpenRedirect, SSRF
@@ -27,6 +27,7 @@ detector/
 │
 │ # Access Control
 ├── blocklist.detector.ts             # IP/key blocklist (KV-based)
+├── cuckoo-blocklist.detector.ts      # Cost-efficient blocklist (Cache API + Cuckoo Filter)
 ├── rate-limit.detector.ts            # Rate limiting (CF API or KV)
 │
 │ # Injection Attacks
@@ -233,6 +234,10 @@ See existing detectors:
 **Behavior Detection:**
 - `brute-force.detector.ts` - KV-based failure counting
 - `rate-limit.detector.ts` - CF API or KV rate limiting
+
+**Cost-Efficient Blocklist:**
+- `cuckoo-blocklist.detector.ts` - Cache API + Cuckoo Filter (~99% cost reduction)
+  - See [Cuckoo Blocklist Guide](../../docs/cuckoo-blocklist.md) for details
 
 **Custom Examples:**
 - `_examples.ts` - Custom detector examples

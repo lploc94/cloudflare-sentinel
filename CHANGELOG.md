@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2025-12-02
+
+### Added
+- **CuckooBlocklistDetector** - Cost-efficient blocklist using Cache API + Cuckoo Filter
+  - ~99% cost reduction compared to KV-based blocklist ($0.50 → $0.006 per 1M requests)
+  - O(1) probabilistic lookup with ~1% false positive rate
+  - Pending cache for immediate blocking at edge
+  - KV verification to eliminate false positives (default enabled)
+  - See [Cuckoo Blocklist Guide](docs/cuckoo-blocklist.md)
+
+- **CuckooBlocklistHandler** - Handler for Cache API + Queue-based blocking
+  - Immediate block via pending cache
+  - Global sync via Queue for filter updates
+  - `sendBlockToQueue()` / `sendUnblockToQueue()` helpers
+
+- **Queue Processing Helpers**
+  - `processBlocklistQueue()` - Queue consumer for filter updates
+  - `rebuildBlocklistFilter()` - Cron helper to rebuild filter from KV
+  - `getBlocklistStats()` - Get blocklist statistics
+
+- **CuckooFilter Utility** - Probabilistic data structure in `utils/cuckoo.ts`
+  - O(1) add, contains, remove operations
+  - Supports deletion (unlike Bloom filter)
+  - Serializable to/from Uint8Array for Cache API storage
+
+### Documentation
+- New [Cuckoo Blocklist Guide](docs/cuckoo-blocklist.md) with architecture, use cases, and cost analysis
+
 ## [2.2.0] - 2025-11-29
 
 ### Added

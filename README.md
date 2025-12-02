@@ -68,6 +68,7 @@ export default {
 
 - [Getting Started](docs/getting-started.md) - Installation & setup
 - [Architecture](docs/architecture.md) - System design
+- [Cuckoo Blocklist](docs/cuckoo-blocklist.md) - Cost-efficient blocklist (~99% savings)
 - [Notifications](docs/notifications.md) - Slack/email alerts
 
 ### Component Guides
@@ -83,7 +84,7 @@ export default {
 ### Detectors
 | Type | Detectors |
 |------|-----------|
-| Security | `BlocklistDetector`, `RateLimitDetector`, `ReputationDetector` |
+| Security | `BlocklistDetector`, `CuckooBlocklistDetector`, `RateLimitDetector`, `ReputationDetector` |
 | Request | `SQLInjectionRequestDetector`, `XSSRequestDetector`, `PathTraversalRequestDetector`, `CommandInjectionDetector`, `SSRFDetector`, `NoSQLInjectionDetector`, `XXEDetector`, `SSTIDetector`, `JWTDetector` |
 | Response | `SQLInjectionResponseDetector`, `XSSResponseDetector`, `PathTraversalResponseDetector` |
 | Behavior | `BruteForceDetector`, `EntropyDetector`, `FailureThresholdDetector` |
@@ -103,6 +104,7 @@ export default {
 - `LogHandler` - Console logging
 - `NotifyHandler` - Webhook notifications (Slack, Discord, etc.)
 - `BlocklistHandler` - Add to KV blocklist
+- `CuckooBlocklistHandler` - Add to Cache API blocklist + Queue sync
 - `ReputationHandler` - Update IP reputation score
 - `AnalyticsHandler` - Cloudflare Analytics Engine logging
 
