@@ -7,33 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.2.1] - 2025-12-02
+## [2.3.0-beta.1] - 2025-12-03
+
+### Changed
+- **BREAKING**: Unified `BlocklistDetector` with `mode` option (`'direct'` | `'cuckoo'`)
+- **BREAKING**: Unified `BlocklistHandler` with `mode` option (`'direct'` | `'cuckoo'`)
+
+### Removed
+- `CuckooBlocklistDetector` - Use `BlocklistDetector({ mode: 'cuckoo' })`
+- `CuckooBlocklistHandler` - Use `BlocklistHandler({ mode: 'cuckoo' })`
 
 ### Added
-- **CuckooBlocklistDetector** - Cost-efficient blocklist using Cache API + Cuckoo Filter
-  - ~99% cost reduction compared to KV-based blocklist ($0.50 → $0.006 per 1M requests)
-  - O(1) probabilistic lookup with ~1% false positive rate
-  - Pending cache for immediate blocking at edge
-  - KV verification to eliminate false positives (default enabled)
-  - See [Cuckoo Blocklist Guide](docs/cuckoo-blocklist.md)
+- `BlocklistDetector` mode options:
+  - `'direct'`: Simple KV read per request (default)
+  - `'cuckoo'`: Cache API + Cuckoo Filter + KV verify
+- `BlocklistHandler` mode options:
+  - `'direct'`: KV-only writes (default)
+  - `'cuckoo'`: Pending Cache + KV + Queue sync
+- Queue helpers: `sendBlockToQueue()`, `sendUnblockToQueue()`, `processBlocklistQueue()`, `rebuildBlocklistFilter()`, `getBlocklistStats()`
+- `CuckooFilter` utility for probabilistic data structure
 
-- **CuckooBlocklistHandler** - Handler for Cache API + Queue-based blocking
-  - Immediate block via pending cache
-  - Global sync via Queue for filter updates
-  - `sendBlockToQueue()` / `sendUnblockToQueue()` helpers
+### Migration
+```typescript
+// Before
+new CuckooBlocklistDetector({ kv });
+new CuckooBlocklistHandler({ queue });
 
-- **Queue Processing Helpers**
-  - `processBlocklistQueue()` - Queue consumer for filter updates
-  - `rebuildBlocklistFilter()` - Cron helper to rebuild filter from KV
-  - `getBlocklistStats()` - Get blocklist statistics
-
-- **CuckooFilter Utility** - Probabilistic data structure in `utils/cuckoo.ts`
-  - O(1) add, contains, remove operations
-  - Supports deletion (unlike Bloom filter)
-  - Serializable to/from Uint8Array for Cache API storage
-
-### Documentation
-- New [Cuckoo Blocklist Guide](docs/cuckoo-blocklist.md) with architecture, use cases, and cost analysis
+// After  
+new BlocklistDetector({ kv, mode: 'cuckoo' });
+new BlocklistHandler({ kv, mode: 'cuckoo', queue });
+```
 
 ## [2.2.0] - 2025-11-29
 
