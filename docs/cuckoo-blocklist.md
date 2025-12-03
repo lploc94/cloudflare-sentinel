@@ -119,21 +119,24 @@ Traditional blocklist implementations using KV reads per request can be expensiv
 
 ## Components
 
-### 1. CuckooBlocklistDetector
+### 1. BlocklistDetector (mode: 'cuckoo')
 
 Checks if IP/token is blocked using Cache API + Cuckoo Filter.
 
 ```typescript
-import { CuckooBlocklistDetector } from 'cloudflare-sentinel';
+import { BlocklistDetector } from 'cloudflare-sentinel';
 
-// Basic usage
-const detector = new CuckooBlocklistDetector({
+// Cuckoo mode - fast + cost-efficient
+const detector = new BlocklistDetector({
   kv: env.BLOCKLIST_KV,
+  mode: 'cuckoo',
+  verifyWithKV: true, // Eliminate false positives
 });
 
 // Custom key extractor (e.g., for token-based blocking)
-const tokenDetector = new CuckooBlocklistDetector({
+const tokenDetector = new BlocklistDetector({
   kv: env.BLOCKLIST_KV,
+  mode: 'cuckoo',
   keyExtractor: (req) => req.headers.get('authorization')?.replace('Bearer ', ''),
 });
 
@@ -145,30 +148,29 @@ pipeline.addDetector(detector);
 
 ```typescript
 // Immediate block (add to pending cache)
-await CuckooBlocklistDetector.addToPending(ip, 300); // 5 min TTL
+await BlocklistDetector.addToPending(ip, 300); // 5 min TTL
 
-// Remove from pending
-await CuckooBlocklistDetector.removeFromPending(ip);
+// Remove from pending (local only!)
+await BlocklistDetector.removeFromPending(ip);
 
 // Check if in pending
-const isPending = await CuckooBlocklistDetector.isInPending(ip);
+const isPending = await BlocklistDetector.isInPending(ip);
 
 // Force reload filter from KV
-await CuckooBlocklistDetector.invalidateFilterCache();
+await BlocklistDetector.invalidateFilterCache();
 ```
 
-### 2. CuckooBlocklistHandler
+### 2. BlocklistHandler (mode: 'cuckoo')
 
-Handles blocking via Cache API + optional Queue sync.
+Handles blocking via Cache API + KV + Queue sync.
 
 ```typescript
-import { CuckooBlocklistHandler } from 'cloudflare-sentinel';
+import { BlocklistHandler } from 'cloudflare-sentinel';
 
-// Basic (immediate block only)
-pipeline.on(ActionType.BLOCK, new CuckooBlocklistHandler());
-
-// With Queue for global sync
-pipeline.on(ActionType.BLOCK, new CuckooBlocklistHandler({
+// Cuckoo mode with Queue for global sync
+pipeline.on(ActionType.BLOCK, new BlocklistHandler({
+  kv: env.BLOCKLIST_KV,
+  mode: 'cuckoo',
   queue: env.BLOCKLIST_QUEUE,
   pendingTtl: 300, // 5 minutes
 }));
@@ -182,7 +184,7 @@ Send block/unblock requests to queue from anywhere.
 import { sendBlockToQueue, sendUnblockToQueue } from 'cloudflare-sentinel';
 
 // Block IP globally
-await CuckooBlocklistDetector.addToPending(ip);  // Immediate
+await BlocklistDetector.addToPending(ip);  // Immediate
 await sendBlockToQueue(env.BLOCKLIST_QUEUE, ip, 'Spam detected', {
   expiresAt: Date.now() + 3600000, // 1 hour
   score: 0.95,
