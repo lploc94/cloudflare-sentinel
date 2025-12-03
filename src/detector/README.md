@@ -235,9 +235,43 @@ See existing detectors:
 - `brute-force.detector.ts` - KV-based failure counting
 - `rate-limit.detector.ts` - CF API or KV rate limiting
 
-**Cost-Efficient Blocklist:**
-- `cuckoo-blocklist.detector.ts` - Cache API + Cuckoo Filter (~99% cost reduction)
-  - See [Cuckoo Blocklist Guide](../../docs/cuckoo-blocklist.md) for details
+**Blocklist Detectors:**
+- `blocklist.detector.ts` - Simple KV-based blocklist
+- `cuckoo-blocklist.detector.ts` - Cost-efficient Cache API + Cuckoo Filter
+
+### BlocklistDetector vs CuckooBlocklistDetector
+
+| Aspect | BlocklistDetector | CuckooBlocklistDetector |
+|--------|-------------------|-------------------------|
+| **Storage** | KV only | Cache API + Cuckoo Filter + KV |
+| **Read cost** | ~$0.50/1M reads | ~$0.001/1M reads |
+| **Latency** | ~10-50ms | ~0-5ms |
+| **False positives** | None | ~1% (eliminated with KV verify) |
+| **Complexity** | Simple | Requires Queue/Cron for sync |
+
+**When to use BlocklistDetector:**
+- ✅ Simple setup, low traffic (<100K req/month)
+- ✅ Need zero false positives without extra verification
+- ✅ Don't want Queue/Cron infrastructure
+
+**When to use CuckooBlocklistDetector:**
+- ✅ High traffic (>100K req/month)
+- ✅ Cost optimization is priority
+- ✅ Need fastest possible blocking (~0ms)
+- ✅ Have Queue infrastructure for real-time sync
+
+**Both can coexist** - they use the same KV format (`blocked:${key}`):
+```typescript
+// Use both detectors for defense in depth
+const sentinel = new Sentinel({
+  detectors: [
+    new CuckooBlocklistDetector({ kv, verifyWithKV: true }), // Fast path
+    new BlocklistDetector({ kv }),  // Fallback (if filter not loaded)
+  ],
+});
+```
+
+See [Cuckoo Blocklist Guide](../../docs/cuckoo-blocklist.md) for details.
 
 **Custom Examples:**
 - `_examples.ts` - Custom detector examples

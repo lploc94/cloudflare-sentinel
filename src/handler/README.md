@@ -121,6 +121,60 @@ new BlocklistHandler({
 })
 ```
 
+### CuckooBlocklistHandler
+Cost-efficient blocking with Cache API + Cuckoo Filter:
+```typescript
+new CuckooBlocklistHandler({
+  queue: env.BLOCKLIST_QUEUE,  // Optional: for global sync
+  pendingTtl: 300,             // Pending cache TTL (default: 300s)
+})
+```
+
+## BlocklistHandler vs CuckooBlocklistHandler
+
+| Aspect | BlocklistHandler | CuckooBlocklistHandler |
+|--------|------------------|------------------------|
+| **Write** | KV only | Pending Cache + KV + Queue |
+| **Read** | KV per request | Filter (cached) + KV verify |
+| **Latency** | ~10-50ms | ~0-5ms |
+| **Cost (1M req)** | ~$0.50 | ~$0.001 |
+| **Complexity** | Simple | Requires Queue consumer |
+| **Global sync** | Immediate (KV) | ~5s (Queue) or ~5m (Cron) |
+
+### When to use BlocklistHandler
+- ✅ Simple setup, no Queue needed
+- ✅ Low traffic (<100K requests/month)
+- ✅ Need immediate global consistency
+- ✅ Already have KV, don't want extra infrastructure
+
+### When to use CuckooBlocklistHandler
+- ✅ High traffic (>100K requests/month)
+- ✅ Cost optimization is priority
+- ✅ Can tolerate ~5s global sync delay
+- ✅ Already have Queue infrastructure
+- ✅ Need 0ms edge-local blocking
+
+### Hybrid Usage (Both Together)
+Both handlers use the same KV format (`blocked:${key}`), so they're compatible:
+
+```typescript
+// Option 1: Use CuckooBlocklistHandler for write + both detectors for read
+pipeline.on(ActionType.BLOCK, new CuckooBlocklistHandler({
+  queue: env.BLOCKLIST_QUEUE,
+}));
+
+// BlocklistDetector: Fallback direct KV check
+// CuckooBlocklistDetector: Fast path via Filter
+
+// Option 2: Use BlocklistHandler for write + CuckooBlocklistDetector for read
+pipeline.on(ActionType.BLOCK, new BlocklistHandler({
+  kv: env.BLOCKLIST_KV,
+}));
+
+// Use scheduled cron to rebuild Cuckoo Filter from KV every 5-10 minutes
+// This gives cost-efficient reads with simple writes
+```
+
 ## Action Types
 
 | Type | Handler | Description |
