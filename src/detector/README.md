@@ -235,40 +235,38 @@ See existing detectors:
 - `brute-force.detector.ts` - KV-based failure counting
 - `rate-limit.detector.ts` - CF API or KV rate limiting
 
-**Blocklist Detectors:**
-- `blocklist.detector.ts` - Simple KV-based blocklist
-- `cuckoo-blocklist.detector.ts` - Cost-efficient Cache API + Cuckoo Filter
+**Blocklist Detector:**
+- `blocklist.detector.ts` - Unified blocklist with two modes
 
-### BlocklistDetector vs CuckooBlocklistDetector
+### BlocklistDetector Modes
 
-| Aspect | BlocklistDetector | CuckooBlocklistDetector |
-|--------|-------------------|-------------------------|
+| Aspect | mode: 'direct' | mode: 'cuckoo' |
+|--------|----------------|----------------|
 | **Storage** | KV only | Cache API + Cuckoo Filter + KV |
 | **Read cost** | ~$0.50/1M reads | ~$0.001/1M reads |
 | **Latency** | ~10-50ms | ~0-5ms |
-| **False positives** | None | ~1% (eliminated with KV verify) |
+| **False positives** | None | ~1% (eliminated with verifyWithKV) |
 | **Complexity** | Simple | Requires Queue/Cron for sync |
 
-**When to use BlocklistDetector:**
+**When to use mode: 'direct':**
 - ✅ Simple setup, low traffic (<100K req/month)
-- ✅ Need zero false positives without extra verification
 - ✅ Don't want Queue/Cron infrastructure
 
-**When to use CuckooBlocklistDetector:**
+**When to use mode: 'cuckoo':**
 - ✅ High traffic (>100K req/month)
 - ✅ Cost optimization is priority
 - ✅ Need fastest possible blocking (~0ms)
-- ✅ Have Queue infrastructure for real-time sync
 
-**Both can coexist** - they use the same KV format (`blocked:${key}`):
 ```typescript
-// Use both detectors for defense in depth
-const sentinel = new Sentinel({
-  detectors: [
-    new CuckooBlocklistDetector({ kv, verifyWithKV: true }), // Fast path
-    new BlocklistDetector({ kv }),  // Fallback (if filter not loaded)
-  ],
-});
+// Simple mode
+new BlocklistDetector({ kv, mode: 'direct' })
+
+// Cuckoo mode (fast + cost-efficient)
+new BlocklistDetector({ kv, mode: 'cuckoo', verifyWithKV: true })
+
+// Hybrid: direct write + cuckoo read (with cron rebuild)
+new BlocklistHandler({ kv, mode: 'direct' });
+new BlocklistDetector({ kv, mode: 'cuckoo' });
 ```
 
 See [Cuckoo Blocklist Guide](../../docs/cuckoo-blocklist.md) for details.

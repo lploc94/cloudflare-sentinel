@@ -14,7 +14,6 @@ export {
 
 // Security detectors
 export { BlocklistDetector, type BlocklistDetectorOptions } from './blocklist.detector';
-export { CuckooBlocklistDetector, type CuckooBlocklistDetectorOptions } from './cuckoo-blocklist.detector';
 export { RateLimitDetector, type RateLimitDetectorConfig, type CloudflareRateLimitConfig, type KVRateLimitConfig, type RateLimiter } from './rate-limit.detector';
 export { ReputationDetector, type ReputationDetectorOptions } from './reputation.detector';
 
