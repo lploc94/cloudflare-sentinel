@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0-beta.2] - 2025-12-04
+
+### Changed
+- **PipelineContext** now includes common request info fields for easier handler access:
+  - `clientIp`: Client IP address (from CF-Connecting-IP)
+  - `path`: Request path
+  - `method`: Request method (GET, POST, etc.)
+  - `userAgent`: User agent string
+  - `metadata`: Generic extension point for app-specific data (userId, CF colo, etc.)
+
+### Removed
+- `userId` from PipelineContext - moved to `metadata` (app-specific)
+
+### Migration
+```typescript
+// Before - handlers had to extract IP from request or evidence
+const ip = ctx.request?.headers.get('cf-connecting-ip');
+
+// After - direct access from context
+const ip = ctx.clientIp;
+const userId = ctx.metadata?.userId; // app-specific, in metadata
+```
+
 ## [2.3.0-beta.1] - 2025-12-03
 
 ### Changed

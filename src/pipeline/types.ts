@@ -153,15 +153,53 @@ export interface Action {
  * });
  * ```
  */
+/**
+ * Pipeline context - contains all request information for detectors and handlers
+ * 
+ * This is the "bag of data" that flows through the pipeline.
+ * Handlers and detectors can read from this context to make decisions.
+ */
 export interface PipelineContext {
   /** Cloudflare environment bindings (KV, D1, R2, etc.) */
   env: Record<string, any>;
   /** Cloudflare execution context for waitUntil */
   ctx: ExecutionContext;
-  /** Original request (set by pipeline) */
+  /** Original request */
   request?: Request;
-  /** Original response (set by pipeline for response detection) */
+  /** Original response (for response-phase detection) */
   response?: Response;
+  
+  // ─── Request Info (extracted for convenience) ───────────────────────────
+  
+  /** Client IP address (from CF-Connecting-IP) */
+  clientIp?: string;
+  /** Request path (e.g., '/api/auth/login') */
+  path?: string;
+  /** Request method (GET, POST, etc.) */
+  method?: string;
+  /** User agent */
+  userAgent?: string;
+  
+  // ─── Extension Point ───────────────────────────────────────────────────
+  
+  /** 
+   * Custom metadata - extend with any fields you need
+   * Use this for app-specific context data (CF metadata, tenant info, etc.)
+   * 
+   * @example
+   * ```typescript
+   * const ctx = {
+   *   ...baseContext,
+   *   metadata: {
+   *     colo: request.cf?.colo,
+   *     country: request.cf?.country,
+   *     tenantId: 'acme',
+   *     requestId: crypto.randomUUID(),
+   *   }
+   * };
+   * ```
+   */
+  metadata?: Record<string, any>;
 }
 
 /**
